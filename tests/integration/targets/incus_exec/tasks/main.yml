@@ -1,0 +1,73 @@
+- name: Cleanup (pre-test)
+  crystian.incus.incus_instance:
+    name: "test-exec"
+    state: absent
+    force: true
+  ignore_errors: true
+
+- name: Create test instance
+  crystian.incus.incus_instance:
+    name: "test-exec"
+    remote_image: "images:alpine/edge/cloud"
+    started: true
+
+- name: Wait for instance to be ready
+  pause:
+    seconds: 5
+
+- name: Simple command execution
+  crystian.incus.incus_exec:
+    name: "test-exec"
+    command: "echo hello world"
+  register: exec_simple
+
+- name: Assert simple command
+  assert:
+    that:
+      - exec_simple.rc == 0
+      - "'hello world' in exec_simple.stdout"
+
+- name: List command execution
+  crystian.incus.incus_exec:
+    name: "test-exec"
+    command: ['echo', 'list', 'args']
+  register: exec_list
+
+- name: Assert list command
+  assert:
+    that:
+      - exec_list.rc == 0
+      - "'list args' in exec_list.stdout"
+
+- name: Env var execution
+  crystian.incus.incus_exec:
+    name: "test-exec"
+    command: "env"
+    env:
+      TEST_VAR: "my_value"
+  register: exec_env
+
+- name: Assert env var
+  assert:
+    that:
+      - exec_env.rc == 0
+      - "'TEST_VAR=my_value' in exec_env.stdout"
+
+- name: CWD execution
+  crystian.incus.incus_exec:
+    name: "test-exec"
+    command: "pwd"
+    cwd: "/tmp"
+  register: exec_cwd
+
+- name: Assert cwd
+  assert:
+    that:
+      - exec_cwd.rc == 0
+      - "'/tmp' in exec_cwd.stdout"
+
+- name: Cleanup (post-test)
+  crystian.incus.incus_instance:
+    name: "test-exec"
+    state: absent
+    force: true

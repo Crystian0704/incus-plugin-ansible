@@ -1,0 +1,122 @@
+- name: Cleanup (pre-test)
+  crystian.incus.incus_instance:
+    name: "{{ item }}"
+    state: absent
+    force: true
+  loop:
+    - test-cloud-init
+    - test-cloud-init-vm
+    - test-aliases
+    - test-template
+  ignore_errors: true
+
+- name: Create instance with cloud-init
+  crystian.incus.incus_instance:
+    name: "test-cloud-init"
+    remote_image: "images:alpine/edge/cloud"
+    started: true
+    cloud_init_user_data: |
+      #cloud-config
+      runcmd:
+        - [touch, /run/cloud.init.ran]
+    cloud_init_network_config: |
+      version: 2
+      ethernets:
+        eth0:
+          dhcp4: true
+  register: result
+
+- name: Assert changed
+  assert:
+    that:
+      - result.changed == true
+
+- name: Verify user-data config
+  command: incus config get test-cloud-init cloud-init.user-data
+  register: userdata_check
+
+- name: Assert user-data is set
+  assert:
+    that:
+      - "'runcmd' in userdata_check.stdout"
+
+- name: Create VM instance with cloud-init disk
+  crystian.incus.incus_instance:
+    name: "test-cloud-init-vm"
+    remote_image: "images:debian/12/cloud"
+    vm: true
+    cloud_init_disk: true
+    cloud_init_user_data: "#cloud-config\npackage_upgrade: true"
+  register: vm_result
+
+- name: Assert VM changed
+  assert:
+    that:
+      - vm_result.changed == true
+
+- name: Verify device added
+  command: incus config device list test-cloud-init-vm
+  register: device_check
+
+- name: Assert cloud-init device exists
+  assert:
+    that:
+      - "'cloud-init' in device_check.stdout"
+
+- name: Create instance with cloud_init aliases
+  crystian.incus.incus_instance:
+    name: "test-aliases"
+    remote_image: "images:alpine/edge/cloud"
+    started: true
+    cloud_init_user_data: "#cloud-config\ntimezone: UTC" 
+    cloud_init_network_config: "version: 2\nethernets:\n  eth0:\n    dhcp4: true"
+  register: alias_result
+
+- name: Assert alias instance changed
+  assert:
+    that:
+      - alias_result.changed == true
+
+- name: Verify alias config
+  command: incus config get test-aliases cloud-init.network-config
+  register: alias_config_check
+
+- name: Assert alias content matches
+  assert:
+    that:
+      - "'dhcp4' in alias_config_check.stdout"
+
+- name: Create instance with template
+  crystian.incus.incus_instance:
+    name: "test-template"
+    remote_image: "images:alpine/edge/cloud"
+    started: true
+    cloud_init_user_data: "{{ lookup('template', playbook_dir ~ '/integration/targets/incus_instance_cloud_init/templates/cloud-config.j2') }}"
+  vars:
+    touch_file: "template.ran"
+  register: template_result
+
+- name: Assert template instance changed
+  assert:
+    that:
+      - template_result.changed == true
+
+- name: Verify template config
+  command: incus config get test-template cloud-init.user-data
+  register: template_config_check
+
+- name: Assert template content matches
+  assert:
+    that:
+      - "'template.ran' in template_config_check.stdout"
+
+- name: Cleanup
+  crystian.incus.incus_instance:
+    name: "{{ item }}"
+    state: absent
+    force: true
+  loop:
+    - test-cloud-init
+    - test-cloud-init-vm
+    - test-aliases
+    - test-template

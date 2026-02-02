@@ -1,0 +1,129 @@
+- name: Cleanup (pre-test)
+  crystian.incus.incus_instance:
+    name: "test-file"
+    state: absent
+    force: true
+  ignore_errors: true
+
+- name: Create test instance
+  crystian.incus.incus_instance:
+    name: "test-file"
+    remote_image: "images:alpine/edge/cloud"
+    started: true
+
+- name: Wait for instance
+  pause:
+    seconds: 5
+
+# --- PUSH TESTS (Copy Style) ---
+- name: Push content with owner/group
+  crystian.incus.incus_file:
+    name: "test-file"
+    dest: "/root/test_content.txt"
+    content: "content-data"
+    mode: '0644'
+    owner: root
+    group: root
+    state: pushed
+  register: push_content
+
+- name: Assert push content
+  assert:
+    that:
+      - push_content.changed == true
+
+- name: Verify content inside
+  command: incus exec test-file -- cat /root/test_content.txt
+  register: verify_content
+
+- name: Assert content match
+  assert:
+    that:
+      - "'content-data' in verify_content.stdout"
+
+- name: Push local file
+  copy:
+    content: "file-data"
+    dest: "/tmp/local_test_file.txt"
+
+- name: Push file
+  crystian.incus.incus_file:
+    name: "test-file"
+    src: "/tmp/local_test_file.txt"
+    dest: "/root/test_file.txt"
+    state: pushed
+  register: push_file
+
+- name: Assert push file
+  assert:
+    that:
+      - push_file.changed == true
+
+- name: Verify file inside
+  command: incus exec test-file -- cat /root/test_file.txt
+  register: verify_file
+
+- name: Assert file match
+  assert:
+    that:
+      - "'file-data' in verify_file.stdout"
+
+# --- PULL TESTS (Fetch Style) ---
+- name: Pull file
+  crystian.incus.incus_file:
+    name: "test-file"
+    src: "/root/test_content.txt"
+    dest: "/tmp/pulled_content.txt"
+    state: pulled
+  register: pull_file
+
+- name: Assert pull
+  assert:
+    that:
+      - pull_file.changed == true
+
+- name: Verify pulled content
+  command: cat /tmp/pulled_content.txt
+  register: verify_pull
+
+- name: Assert pulled match
+  assert:
+    that:
+      - "'content-data' in verify_pull.stdout"
+
+# --- DELETE TESTS (File Style) ---
+- name: Delete file
+  crystian.incus.incus_file:
+    name: "test-file"
+    dest: "/root/test_content.txt"
+    state: absent
+  register: delete_file
+
+- name: Assert delete
+  assert:
+    that:
+      - delete_file.changed == true
+
+- name: Verify deleted
+  command: incus exec test-file -- ls /root/test_content.txt
+  register: verify_delete
+  ignore_errors: true
+
+- name: Assert verification failed (file missing)
+  assert:
+    that:
+      - verify_delete.rc != 0
+
+- name: Cleanup (post-test)
+  crystian.incus.incus_instance:
+    name: "test-file"
+    state: absent
+    force: true
+
+- name: Cleanup local files
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /tmp/local_test_file.txt
+    - /tmp/pulled_content.txt

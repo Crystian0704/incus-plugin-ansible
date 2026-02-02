@@ -1,0 +1,74 @@
+- name: Cleanup export test
+  crystian.incus.incus_instance:
+    name: "test-export"
+    state: absent
+    force: true
+  ignore_errors: true
+
+- name: Cleanup local backup
+  file:
+    path: "/tmp/test-export.tar.gz"
+    state: absent
+
+- name: Create instance
+  crystian.incus.incus_instance:
+    name: "test-export"
+    remote_image: "images:alpine/edge/cloud"
+    started: true
+
+- name: Export instance
+  crystian.incus.incus_export:
+    instance: "test-export"
+    path: "/tmp/test-export.tar.gz"
+  register: export_res
+
+- name: Assert exported
+  assert:
+    that:
+      - export_res.changed == true
+      - export_res.file == "/tmp/test-export.tar.gz"
+
+- name: Verify file exists
+  stat:
+    path: "/tmp/test-export.tar.gz"
+  register: file_stat
+
+- name: Assert file stat
+  assert:
+    that:
+      - file_stat.stat.exists == true
+      - file_stat.stat.size > 0
+
+- name: Recycle export (no force)
+  crystian.incus.incus_export:
+    instance: "test-export"
+    path: "/tmp/test-export.tar.gz"
+  register: export_dup
+
+- name: Assert no change
+  assert:
+    that:
+      - export_dup.changed == false
+
+- name: Recycle export (force)
+  crystian.incus.incus_export:
+    instance: "test-export"
+    path: "/tmp/test-export.tar.gz"
+    force: true
+  register: export_force
+
+- name: Assert force change
+  assert:
+    that:
+      - export_force.changed == true
+
+- name: Cleanup
+  crystian.incus.incus_instance:
+    name: "test-export"
+    state: absent
+    force: true
+
+- name: Cleanup local file
+  file:
+    path: "/tmp/test-export.tar.gz"
+    state: absent

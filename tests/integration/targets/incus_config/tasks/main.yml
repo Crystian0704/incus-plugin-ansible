@@ -1,0 +1,87 @@
+
+- name: Create a test container
+  crystian.incus.incus_instance:
+    name: "test-config-container"
+    remote_image: "images:alpine/edge"
+    state: present
+    started: true
+
+- name: Set memory limit
+  crystian.incus.incus_config:
+    name: "test-config-container"
+    config:
+      limits.memory: "128MiB"
+  register: result
+
+- name: Assert memory limit set (changed)
+  assert:
+    that:
+      - result.changed == true
+
+- name: Set memory limit again (idempotency)
+  crystian.incus.incus_config:
+    name: "test-config-container"
+    config:
+      limits.memory: "128MiB"
+  register: result
+
+- name: Assert memory limit unchanged
+  assert:
+    that:
+      - result.changed == false
+
+- name: Create dummy folder for test
+  command: mkdir -p /tmp/incus_test_vol
+
+- name: Add disk device
+  crystian.incus.incus_config:
+    name: "test-config-container"
+    devices:
+      testdisk:
+        type: disk
+        source: /tmp/incus_test_vol
+        path: /mnt/test
+  register: result
+
+- name: Assert disk added
+  assert:
+    that:
+      - result.changed == true
+
+- name: Unset config
+  crystian.incus.incus_config:
+    name: "test-config-container"
+    state: absent
+    config:
+      - limits.memory
+  register: result
+
+- name: Assert config unset
+  assert:
+    that:
+      - result.changed == true
+
+- name: Remove device
+  crystian.incus.incus_config:
+    name: "test-config-container"
+    state: absent
+    devices:
+      - testdisk
+  register: result
+
+- name: Assert device removed
+  assert:
+    that:
+      - result.changed == true
+
+- name: Clean up temporary folder
+  file:
+    path: /tmp/incus_test_vol
+    state: absent
+
+- name: Remove test container
+  crystian.incus.incus_instance:
+    name: "test-config-container"
+    state: absent
+    force: true
+    remote_image: "images:alpine/edge" # Required by module even for absent

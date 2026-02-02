@@ -1,0 +1,3 @@
+#cloud-config
+runcmd:
+  - [touch, /run/{{ touch_file | default('default.ran') }}]

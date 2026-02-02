@@ -1,0 +1,100 @@
+- name: Cleanup snapshot test
+  crystian.incus.incus_instance:
+    name: "test-snap"
+    state: absent
+    force: true
+  ignore_errors: true
+
+- name: Create instance
+  crystian.incus.incus_instance:
+    name: "test-snap"
+    remote_image: "images:alpine/edge/cloud"
+    started: true
+
+- name: Create snapshot
+  crystian.incus.incus_snapshot:
+    instance: "test-snap"
+    snapshot: "snap0"
+    state: present
+  register: snap_create
+
+- name: Assert created
+  assert:
+    that:
+      - snap_create.changed == true
+
+- name: Create duplicate scanpshot (no reuse)
+  crystian.incus.incus_snapshot:
+    instance: "test-snap"
+    snapshot: "snap0"
+    state: present
+  register: snap_dup
+  ignore_errors: true
+
+- name: Assert duplicate failed
+  assert:
+    that:
+      - snap_dup.changed == false
+
+- name: Reuse snapshot
+  crystian.incus.incus_snapshot:
+    instance: "test-snap"
+    snapshot: "snap0"
+    state: present
+    reuse: true
+  register: snap_reuse
+
+- name: Assert reused
+  assert:
+    that:
+      - snap_reuse.changed == true
+
+- name: List snapshots (DEBUG)
+  command: incus info test-snap
+  register: debug_info
+
+- debug:
+    var: debug_info.stdout
+
+- name: Rename snapshot
+  crystian.incus.incus_snapshot:
+    instance: "test-snap"
+    snapshot: "snap0"
+    new_name: "snap-renamed"
+    state: renamed
+  register: snap_rename
+
+- name: Assert renamed
+  assert:
+    that:
+      - snap_rename.changed == true
+
+- name: Restore snapshot
+  crystian.incus.incus_snapshot:
+    instance: "test-snap"
+    snapshot: "snap-renamed"
+    state: restored
+  register: snap_restore
+
+- name: Assert restored
+  assert:
+    that:
+      - snap_restore.changed == true
+
+- name: Delete snapshot
+  crystian.incus.incus_snapshot:
+    instance: "test-snap"
+    snapshot: "snap-renamed"
+    state: absent
+  register: snap_delete
+
+- name: Assert deleted
+  assert:
+    that:
+      - snap_delete.changed == true
+
+- name: Cleanup
+  crystian.incus.incus_instance:
+    name: "test-snap"
+    state: absent
+    force: true

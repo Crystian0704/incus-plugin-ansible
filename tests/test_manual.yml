@@ -1,0 +1,6 @@
+- hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - include_tasks: integration/targets/incus_image/tasks/main.yml
+    - include_tasks: integration/targets/incus_publish/tasks/main.yml

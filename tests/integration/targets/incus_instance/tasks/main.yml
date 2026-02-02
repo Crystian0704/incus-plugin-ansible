@@ -1,0 +1,220 @@
+---
+- name: Test incus_instance (init behavior - stopped)
+  crystian.incus.incus_instance:
+    name: test-ansible-init
+    remote_image: images:alpine/edge
+    started: false
+  register: result_init
+
+- name: Verify init result
+  assert:
+    that:
+      - result_init.changed == true
+      - result_init.instance.status == "Stopped"
+
+- name: Test incus_instance idempotency (init)
+  crystian.incus.incus_instance:
+    name: test-ansible-init
+    remote_image: images:alpine/edge
+    started: false
+  register: result_init_idempotency
+
+- name: Verify init idempotency
+  assert:
+    that:
+      - result_init_idempotency.changed == false
+
+- name: Test incus_instance (launch behavior - running)
+  crystian.incus.incus_instance:
+    name: test-ansible-launch
+    remote_image: images:alpine/edge
+    started: true
+  register: result_launch
+
+- name: Verify launch result
+  assert:
+    that:
+      - result_launch.changed == true
+      - result_launch.instance.status == "Running"
+      - "'state' in result_launch"
+      - "'cpu' in result_launch.state"
+
+- name: Test incus_instance idempotency (launch)
+  crystian.incus.incus_instance:
+    name: test-ansible-launch
+    remote_image: images:alpine/edge
+    started: true
+  register: result_launch_idempotency
+
+- name: Verify launch idempotency
+  assert:
+    that:
+      - result_launch_idempotency.changed == false
+
+- name: Test state change (start init-ed instance)
+  crystian.incus.incus_instance:
+    name: test-ansible-init
+    remote_image: images:alpine/edge
+    started: true
+  register: result_start
+
+- name: Verify state change
+  assert:
+    that:
+      - result_start.changed == true
+      - result_start.instance.status == "Running"
+
+- name: Cleanup tests
+  command: incus delete --force {{ item }}
+  loop:
+    - test-ansible-init
+    - test-ansible-launch
+
+- name: Test incus_instance (remote target - kawa)
+  crystian.incus.incus_instance:
+    name: ct1
+    remote: kawa
+    remote_image: images:debian/13
+    started: true
+  register: result_remote
+
+- name: Verify remote launch result
+  assert:
+    that:
+      - result_remote.changed == true
+      - result_remote.instance.status == "Running"
+      - result_remote.instance.name == "ct1"
+      # Location might not be populated or 'none' depending on incus version/cluster state
+
+- name: Cleanup remote test
+  command: incus delete --force kawa:ct1
+
+
+# Complex Container Test
+- name: Create storage volume for test
+  command: incus storage volume create default testvol
+
+- name: Test incus_instance (Complex Container)
+  crystian.incus.incus_instance:
+    name: test-complex-container
+    remote_image: images:alpine/edge
+    started: true
+    description: "Complex container test"
+    storage: default
+    network: incusbr0
+    config:
+      limits.cpu: "1"
+      limits.memory: "128MiB"
+    devices:
+      testvol:
+        path: /opt/testvol
+        pool: default
+        source: testvol
+        type: disk
+  register: result_complex_container
+
+- name: Verify complex container
+  assert:
+    that:
+      - result_complex_container.changed == true
+      - result_complex_container.instance.status == "Running"
+      - result_complex_container.instance.config['limits.cpu'] == "1"
+      - result_complex_container.instance.description == "Complex container test"
+      - "'testvol' in result_complex_container.instance.devices"
+
+# Complex VM Test
+- name: Test incus_instance (Complex VM)
+  crystian.incus.incus_instance:
+    name: test-complex-vm
+    remote_image: images:alpine/edge
+    vm: true
+    started: true
+    storage: default
+    network: incusbr0
+    config:
+      limits.cpu: "2"
+      limits.memory: "1GiB"
+      security.secureboot: "false"
+  register: result_complex_vm
+
+- name: Verify complex VM
+  assert:
+    that:
+      - result_complex_vm.changed == true
+      - result_complex_vm.instance.status == "Running"
+      - result_complex_vm.instance.type == "virtual-machine"
+      - result_complex_vm.instance.config['limits.cpu'] == "2"
+
+- name: Cleanup complex tests
+  command: incus delete --force {{ item }}
+  loop:
+    - test-complex-container
+    - test-complex-vm
+  ignore_errors: true
+
+- name: Cleanup test volume
+  command: incus storage volume delete default testvol
+  ignore_errors: true
+
+# Deletion Tests (state: absent)
+- name: Create instance for delete test
+  crystian.incus.incus_instance:
+    name: instance-to-delete
+    remote_image: images:alpine/edge
+    started: false
+
+- name: "Delete stopped instance (state: absent)"
+  crystian.incus.incus_instance:
+    name: instance-to-delete
+    remote_image: images:alpine/edge
+    state: absent
+  register: result_delete_stopped
+
+- name: Verify delete
+  assert:
+    that:
+      - result_delete_stopped.changed == true
+
+- name: Create running instance for force delete
+  crystian.incus.incus_instance:
+    name: instance-running-delete
+    remote_image: images:alpine/edge
+    started: true
+
+- name: Delete running instance (should fail without force)
+  crystian.incus.incus_instance:
+    name: instance-running-delete
+    remote_image: images:alpine/edge
+    state: absent
+  register: result_delete_fail
+  ignore_errors: true
+
+- name: Verify delete failure
+  assert:
+    that:
+      - result_delete_fail.failed == true
+
+- name: Force delete running instance
+  crystian.incus.incus_instance:
+    name: instance-running-delete
+    remote_image: images:alpine/edge
+    state: absent
+    force: true
+  register: result_force_delete
+
+- name: Verify force delete
+  assert:
+    that:
+      - result_force_delete.changed == true
+
+- name: Verify idempotency (delete non-existent)
+  crystian.incus.incus_instance:
+    name: instance-to-delete
+    remote_image: images:alpine/edge
+    state: absent
+  register: result_delete_idempotency
+
+- name: Verify delete idempotency
+  assert:
+    that:
+      - result_delete_idempotency.changed == false

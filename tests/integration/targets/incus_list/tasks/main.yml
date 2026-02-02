@@ -1,0 +1,86 @@
+---
+- name: List all local instances
+  crystian.incus.incus_list:
+  register: result_all
+
+- name: Verify list structure
+  assert:
+    that:
+      - result_all.changed == false
+      - "'list' in result_all"
+      - result_all.list is sequence
+
+# Setup test instances for filtering
+- name: Setup container for list test
+  crystian.incus.incus_instance:
+    name: list-test-ct
+    remote_image: images:alpine/edge
+    started: true
+
+- name: Setup VM for list test
+  crystian.incus.incus_instance:
+    name: list-test-vm
+    remote_image: images:alpine/edge
+    vm: true
+    started: false
+    config:
+       security.secureboot: "false"
+
+- name: List with status filter (Running)
+  crystian.incus.incus_list:
+    filters:
+      - status=Running
+  register: result_running
+
+- name: Verify status filter
+  assert:
+    that:
+      - result_running.list | length >= 1
+      - result_running.list | selectattr('name', 'equalto', 'list-test-ct') | list | length == 1
+      - result_running.list | selectattr('name', 'equalto', 'list-test-vm') | list | length == 0
+
+- name: List with type filter (virtual-machine)
+  crystian.incus.incus_list:
+    filters:
+      - type=virtual-machine
+  register: result_vm
+
+- name: Verify type filter
+  assert:
+    that:
+      - result_vm.list | length >= 1
+      - result_vm.list | selectattr('name', 'equalto', 'list-test-vm') | list | length == 1
+
+- name: Test incus_list remote (kawa)
+  crystian.incus.incus_list:
+    remote: kawa
+  register: result_remote
+
+- name: Verify remote list
+  assert:
+    that:
+      - result_remote.changed == false
+      - result_remote.list is sequence
+
+- name: Test incus_list all_remotes
+  crystian.incus.incus_list:
+    all_remotes: true
+  register: result_all_remotes
+
+- name: Verify all_remotes list
+  assert:
+    that:
+      - result_all_remotes.list | length >= 2
+      - result_all_remotes.list | selectattr('name', 'equalto', 'list-test-ct') | list | length == 1
+      - result_all_remotes.list | selectattr('name', 'equalto', 'ct1') | list | length == 1
+      # Check locations
+      - (result_all_remotes.list | selectattr('name', 'equalto', 'list-test-ct') | first).location in ['none', 'local']
+      - (result_all_remotes.list | selectattr('name', 'equalto', 'ct1') | first).location == 'kawa'
+
+# Cleanup
+- name: Cleanup list tests
+  command: incus delete --force {{ item }}
+  loop:
+    - list-test-ct
+    - list-test-vm
+  ignore_errors: true

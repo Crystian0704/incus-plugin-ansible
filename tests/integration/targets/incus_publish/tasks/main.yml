@@ -1,0 +1,46 @@
+- name: Cleanup publish test
+  crystian.incus.incus_image:
+    alias: "test-published-img"
+    state: absent
+  ignore_errors: true
+
+- name: Create source instance
+  crystian.incus.incus_instance:
+    name: "test-publish-src"
+    remote_image: "images:alpine/edge/cloud"
+    started: false
+    state: present
+
+- name: Publish instance
+  crystian.incus.incus_publish:
+    instance: "test-publish-src"
+    alias: "test-published-img"
+  register: pub_res
+
+- name: Assert published
+  assert:
+    that:
+      - pub_res.changed == true
+      - pub_res.fingerprint != ""
+
+- name: Publish reuse
+  crystian.incus.incus_publish:
+    instance: "test-publish-src"
+    alias: "test-published-img"
+    reuse: true
+  register: pub_reuse
+
+- name: Assert reuse
+  assert:
+    that:
+      - pub_reuse.changed == true
+
+- name: Delete published image
+  crystian.incus.incus_image:
+    alias: "test-published-img"
+    state: absent
+
+- name: Cleanup source
+  crystian.incus.incus_instance:
+    name: "test-publish-src"
+    state: absent

@@ -1,0 +1,75 @@
+- name: Cleanup image test
+  crystian.incus.incus_image:
+    alias: "test-alpine"
+    state: absent
+  ignore_errors: true
+
+- name: Copy remote image
+  crystian.incus.incus_image:
+    alias: "test-alpine"
+    source: "images:alpine/edge"
+    state: present
+  register: img_copy
+
+- name: Assert copy
+  assert:
+    that:
+      - img_copy.changed == true
+
+- name: Idempotency copy
+  crystian.incus.incus_image:
+    alias: "test-alpine"
+    source: "images:alpine/edge"
+    state: present
+  register: img_copy_idemp
+
+- name: Assert idempotency
+  assert:
+    that:
+      - img_copy_idemp.changed == false
+
+- name: Export image
+  crystian.incus.incus_image:
+    alias: "test-alpine"
+    dest: "/tmp/exported_image"
+    state: exported
+  register: img_export
+
+- name: Assert export
+  assert:
+    that:
+      - img_export.changed == true
+
+- name: Delete image
+  crystian.incus.incus_image:
+    alias: "test-alpine"
+    state: absent
+  register: img_del
+
+- name: Assert delete
+  assert:
+    that:
+      - img_del.changed == true
+
+- name: Import image from file
+  crystian.incus.incus_image:
+    alias: "test-alpine-imported"
+    source: "/tmp/exported_image"
+    state: present
+  register: img_import
+
+- name: Assert import
+  assert:
+    that:
+      - img_import.changed == true
+
+- name: Cleanup imported
+  crystian.incus.incus_image:
+    alias: "test-alpine-imported"
+    state: absent
+  
+- name: Cleanup file
+  file:
+    path: "/tmp/exported_image"
+    state: absent
+  ignore_errors: true
