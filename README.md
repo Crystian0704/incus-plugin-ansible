@@ -37,7 +37,7 @@ ansible-galaxy collection install crystian-incus-1.0.0.tar.gz
 ## Modules
 
 | Module | Description |
-|Args|---|
+|---|---|
 | `incus_instance` | Create, manage, and delete Incus instances (containers/VMs). |
 | `incus_storage` | Manage Incus storage pools. |
 | `incus_storage_volume` | Manage Incus storage volumes. |
