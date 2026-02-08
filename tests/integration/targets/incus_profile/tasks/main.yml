@@ -106,7 +106,7 @@
     source: /tmp/test_profile_source.yml
     remote: "{{ target_remote | default(omit) }}"
     config:
-      limits.memory: "2GiB" # Override source
+      limits.memory: "2GiB"
   register: profile_source_override
 
 - name: Verify source override
@@ -118,10 +118,56 @@
     that:
       - "'limits.memory: 2GiB' in profile_override_show.stdout"
 
-- name: Cleanup source profile
+
+
+- name: Rename profile
   crystian.incus.incus_profile:
-    name: "test-profile-source"
+    name: "test-profile-renamed"
+    rename_from: "test-profile-source"
     remote: "{{ target_remote | default(omit) }}"
+    state: present
+  register: profile_rename
+
+- name: Verify rename
+  assert:
+    that:
+      - profile_rename.changed == true
+
+- name: Create instance with profile
+  crystian.incus.incus_instance:
+    name: "test-profile-instance"
+    remote: "{{ target_remote | default(omit) }}"
+    remote_image: "images:alpine/edge"
+    profiles: ["test-profile-renamed"]
+    started: true
+    state: present
+  register: inst_profile
+
+- name: Verify instance profile config
+  command: incus config show {{ target_remote | default('local') }}:test-profile-instance --expanded
+  register: inst_config
+
+- name: Assert profile applied
+  assert:
+    that:
+      - "'limits.memory: 2GiB' in inst_config.stdout"
+
+- name: Cleanup instance
+  crystian.incus.incus_instance:
+    name: "test-profile-instance"
+    remote: "{{ target_remote | default(omit) }}"
+    state: absent
+    force: true
+
+- name: Cleanup renamed profile
+  crystian.incus.incus_profile:
+    name: "test-profile-renamed"
+    remote: "{{ target_remote | default(omit) }}"
+    state: absent
+    
+- name: Cleanup source profile file
+  file:
+    path: /tmp/test_profile_source.yml
     state: absent
 
 - name: Delete profile

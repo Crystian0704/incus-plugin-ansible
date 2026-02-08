@@ -72,9 +72,38 @@
       - exec_cwd.rc == 0
       - "'/tmp' in exec_cwd.stdout"
 
-- name: Cleanup (post-test)
+    state: absent
+    force: true
+
+- name: Create test instance for failure test
   crystian.incus.incus_instance:
-    name: "test-exec"
+    name: "test-exec-fail"
+    remote: "{{ target_remote | default(omit) }}"
+    remote_image: "images:alpine/edge/cloud"
+    started: true
+
+- name: Wait for instance (fail test)
+  pause:
+    seconds: 5
+
+- name: Execute failing command
+  crystian.incus.incus_exec:
+    name: "test-exec-fail"
+    remote: "{{ target_remote | default(omit) }}"
+    command: "ls /nonexistent"
+  register: exec_fail
+  ignore_errors: true
+
+- name: Assert failing command
+  assert:
+    that:
+      - exec_fail.failed == true
+      - exec_fail.rc != 0
+      - "'No such file' in exec_fail.stderr or 'not found' in exec_fail.stderr"
+
+- name: Cleanup (post-fail-test)
+  crystian.incus.incus_instance:
+    name: "test-exec-fail"
     remote: "{{ target_remote | default(omit) }}"
     state: absent
     force: true

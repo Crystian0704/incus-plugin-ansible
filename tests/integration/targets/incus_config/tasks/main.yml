@@ -108,10 +108,68 @@
     command: "rm -rf /tmp/incus_test_vol"
   when: target_remote is defined
 
-- name: Remove test container
+
+
+- name: Create container for multiple config test
   crystian.incus.incus_instance:
-    name: "test-config-container"
+    name: "test-config-multi"
+    remote_image: "images:alpine/edge"
+    remote: "{{ target_remote | default(omit) }}"
+    state: present
+    started: true
+
+- name: Set multiple config keys
+  crystian.incus.incus_config:
+    name: "test-config-multi"
+    remote: "{{ target_remote | default(omit) }}"
+    config:
+      limits.cpu: "1"
+      limits.memory: "128MiB"
+  register: result_multi
+
+- name: Assert multiple config keys set
+  assert:
+    that:
+      - result_multi.changed == true
+
+- name: Verify multiple keys (command)
+  command: incus config show test-config-multi {{ target_remote | default('') | regex_replace('^', ':') }}
+  register: result_show_multi
+
+- name: Assert multiple keys verification
+  assert:
+    that:
+      - "'limits.cpu: \"1\"' in result_show_multi.stdout"
+      - "'limits.memory: 128MiB' in result_show_multi.stdout"
+
+- name: Update one key, keep other (mixed state idempotency)
+  crystian.incus.incus_config:
+    name: "test-config-multi"
+    remote: "{{ target_remote | default(omit) }}"
+    config:
+      limits.cpu: "2"
+      limits.memory: "128MiB"
+  register: result_mixed
+
+- name: Assert mixed state update
+  assert:
+    that:
+      - result_mixed.changed == true
+
+- name: Verify mixed update
+  command: incus config show test-config-multi {{ target_remote | default('') | regex_replace('^', ':') }}
+  register: result_show_mixed
+
+- name: Assert mixed verification
+  assert:
+    that:
+      - "'limits.cpu: \"2\"' in result_show_mixed.stdout"
+      - "'limits.memory: 128MiB' in result_show_mixed.stdout"
+
+- name: Cleanup multiple config test
+  crystian.incus.incus_instance:
+    name: "test-config-multi"
     remote: "{{ target_remote | default(omit) }}"
     state: absent
     force: true
-    remote_image: "images:alpine/edge" # Required by module even for absent
+

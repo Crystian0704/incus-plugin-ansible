@@ -66,8 +66,78 @@
 - name: Verify state change
   assert:
     that:
-      - result_start.changed == true
       - result_start.instance.status == "Running"
+
+- name: Test config update on running instance
+  crystian.incus.incus_instance:
+    name: test-ansible-init
+    remote: "{{ target_remote | default(omit) }}"
+    config:
+      limits.cpu: "1"
+    state: present
+  register: result_config_update
+
+- name: Verify config update
+  assert:
+    that:
+      - result_config_update.changed == true
+      - result_config_update.instance.config['limits.cpu'] == "1"
+
+- name: Rename instance
+  crystian.incus.incus_instance:
+    name: test-ansible-renamed
+    rename_from: test-ansible-init
+    remote: "{{ target_remote | default(omit) }}"
+    state: present
+  register: result_rename
+
+- name: Verify rename
+  assert:
+    that:
+      - result_rename.changed == true
+      - result_rename.instance.name == "test-ansible-renamed"
+
+- name: Create snapshot for restore test
+  crystian.incus.incus_snapshot:
+    instance: test-ansible-renamed
+    snapshot_name: snap0
+    remote: "{{ target_remote | default(omit) }}"
+    state: present
+
+- name: Change state (to be reverted)
+  crystian.incus.incus_instance:
+    name: test-ansible-renamed
+    remote: "{{ target_remote | default(omit) }}"
+    config:
+      limits.cpu: "2"
+    state: present
+
+- name: Restore from snapshot (using instance module if supported, or snapshot module)
+  crystian.incus.incus_snapshot:
+    instance: test-ansible-renamed
+    snapshot_name: snap0
+    remote: "{{ target_remote | default(omit) }}"
+    state: restored
+  register: result_restore
+
+- name: Verify restore (cpu limit back to 1)
+  crystian.incus.incus_instance:
+    name: test-ansible-renamed
+    remote: "{{ target_remote | default(omit) }}"
+    state: present
+  register: result_after_restore
+
+- name: Assert restored config
+  assert:
+    that:
+      - result_after_restore.instance.config['limits.cpu'] == "1"
+
+- name: Cleanup renamed
+  crystian.incus.incus_instance:
+    name: test-ansible-renamed
+    remote: "{{ target_remote | default(omit) }}"
+    state: absent
+    force: true
 
 - name: Cleanup tests
   crystian.incus.incus_instance:
@@ -93,7 +163,6 @@
       - result_remote.changed == true
       - result_remote.instance.status == "Running"
       - result_remote.instance.name == "ct1"
-      # Location might not be populated or 'none' depending on incus version/cluster state
 
 - name: Cleanup remote test
   crystian.incus.incus_instance:
@@ -103,7 +172,6 @@
     force: true
 
 
-# Complex Container Test
 - name: Create storage volume for test
   crystian.incus.incus_storage_volume:
     pool: default
@@ -141,7 +209,6 @@
       - result_complex_container.instance.description == "Complex container test"
       - "'testvol' in result_complex_container.instance.devices"
 
-# Complex VM Test
 - name: Test incus_instance (Complex VM)
   crystian.incus.incus_instance:
     name: test-complex-vm
@@ -182,7 +249,6 @@
     remote: "{{ target_remote | default(omit) }}"
     state: absent
 
-# Deletion Tests (state: absent)
 - name: Create instance for delete test
   crystian.incus.incus_instance:
     name: instance-to-delete

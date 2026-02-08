@@ -8,10 +8,22 @@
     image_name: "images:debian/13"
 
   tasks:
+    - name: Check for setup marker
+      stat:
+        path: .test_setup_complete
+      register: setup_marker
+
+    - name: End play if setup is complete
+      meta: end_play
+      when:
+        - setup_marker.stat.exists
+        - not (delete_infra | default(false) | bool)
+
     - name: Cleanup previous infra
       crystian.incus.incus_remote:
         name: "{{ remote_name }}"
         state: absent
+      when: delete_infra | default(false) | bool
       ignore_errors: true
 
     - name: Cleanup previous VM
@@ -19,6 +31,7 @@
         name: "{{ vm_name }}"
         state: absent
         force: true
+      when: delete_infra | default(false) | bool
       ignore_errors: true
 
     - name: Create Test VM (Debian 13)
@@ -28,8 +41,7 @@
         type: virtual-machine
         config:
           limits.cpu: "2"
-          limits.memory: "4GiB"
-          security.nesting: "true"
+          limits.memory: "2GiB"
         started: true
         state: present
       register: infra_vm
@@ -63,10 +75,18 @@
         command: "sh -c 'apt-get update && apt-get install -y incus'"
       register: incus_install
 
+    - name: Check Incus Init
+      crystian.incus.incus_exec:
+        instance: "{{ vm_name }}"
+        command: "incus info"
+      register: incus_info
+      ignore_errors: true
+
     - name: Initialize Incus
       crystian.incus.incus_exec:
         instance: "{{ vm_name }}"
         command: "incus admin init --minimal"
+      when: incus_info.rc != 0
 
     - name: Config bind address
       crystian.incus.incus_exec:
@@ -94,4 +114,10 @@
         name: "{{ remote_name }}"
         url: "https://{{ vm_ip }}:8443"
         token: "{{ trust_token_out.stdout | trim }}"
+
         accept_certificate: true
+
+    - name: Create setup marker
+      file:
+        path: .test_setup_complete
+        state: touch

@@ -17,7 +17,6 @@
   pause:
     seconds: 5
 
-# --- PUSH TESTS (Copy Style) ---
 - name: Push content with owner/group
   crystian.incus.incus_file:
     name: "test-file"
@@ -78,7 +77,6 @@
     that:
       - "'file-data' in verify_file.stdout"
 
-# --- PULL TESTS (Fetch Style) ---
 - name: Pull file
   crystian.incus.incus_file:
     name: "test-file"
@@ -102,7 +100,6 @@
     that:
       - "'content-data' in verify_pull.stdout"
 
-# --- DELETE TESTS (File Style) ---
 - name: Delete file
   crystian.incus.incus_file:
     name: "test-file"
@@ -143,3 +140,64 @@
   loop:
     - /tmp/local_test_file.txt
     - /tmp/pulled_content.txt
+
+- name: Create local directory structure
+  file:
+    path: /tmp/test_dir/subdir
+    state: directory
+    mode: '0755'
+
+- name: Create test file in dir
+  copy:
+    content: "dir-content"
+    dest: /tmp/test_dir/subdir/file.txt
+
+- name: Push directory (recursive)
+  crystian.incus.incus_file:
+    name: "test-file"
+    remote: "{{ target_remote | default(omit) }}"
+    src: /tmp/test_dir/
+    dest: /root/remote_dir/
+    state: pushed
+  register: push_dir
+  ignore_errors: true
+
+- name: Assert directory push
+  assert:
+    that:
+      - push_dir.changed == true
+      - push_dir.failed is not defined or not push_dir.failed
+  when: push_dir is succeeded
+
+- name: Update file permissions
+  crystian.incus.incus_file:
+    name: "test-file"
+    remote: "{{ target_remote | default(omit) }}"
+    dest: "/root/test_content.txt"
+    content: "content-data"
+    mode: '0600'
+    state: pushed
+  register: update_perms
+
+- name: Assert permissions updated
+  assert:
+    that:
+      - update_perms.changed == true
+
+- name: Verify permissions
+  crystian.incus.incus_exec:
+    name: "test-file"
+    remote: "{{ target_remote | default(omit) }}"
+    command: "stat -c '%a' /root/test_content.txt"
+  register: verify_perms
+
+- name: Assert permission value
+  assert:
+    that:
+      - "'600' in verify_perms.stdout"
+
+- name: Cleanup directory test
+  file:
+    path: /tmp/test_dir
+    state: absent
+

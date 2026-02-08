@@ -11,7 +11,6 @@
       - "'list' in result_all"
       - result_all.list is sequence
 
-# Setup test instances for filtering
 - name: Setup container for list test
   crystian.incus.incus_instance:
     name: list-test-ct
@@ -27,7 +26,38 @@
     vm: true
     started: false
     config:
+
        security.secureboot: "false"
+
+- name: Setup project for list test
+  crystian.incus.incus_project:
+    name: "list-project"
+    remote: "{{ target_remote | default(omit) }}"
+    config:
+      features.images: "false"
+      features.profiles: "false"
+    state: present
+
+- name: Setup instance in project
+  crystian.incus.incus_instance:
+    name: "list-test-project-ct"
+    project: "list-project"
+    remote: "{{ target_remote | default(omit) }}"
+    remote_image: "images:alpine/edge"
+    started: true
+
+- name: List with project filter
+  crystian.incus.incus_list:
+    remote: "{{ target_remote | default(omit) }}"
+    project: "list-project"
+  register: result_project
+
+- name: Verify project filter
+  assert:
+    that:
+      - result_project.list | length == 1
+      - result_project.list[0].name == "list-test-project-ct"
+
 
 - name: List with status filter (Running)
   crystian.incus.incus_list:
@@ -77,10 +107,8 @@
     that:
       - result_all_remotes.list | length >= 2
       - result_all_remotes.list | selectattr('name', 'equalto', 'list-test-ct') | list | length == 1
-      # Check locations
       - (result_all_remotes.list | selectattr('name', 'equalto', 'list-test-ct') | first).location == (target_remote | default('local'))
 
-# Cleanup
 - name: Cleanup list tests
   crystian.incus.incus_instance:
     name: "{{ item }}"
@@ -90,3 +118,19 @@
   loop:
     - list-test-ct
     - list-test-vm
+
+- name: Cleanup project instance
+  crystian.incus.incus_instance:
+    name: "list-test-project-ct"
+    project: "list-project"
+    remote: "{{ target_remote | default(omit) }}"
+    state: absent
+    force: true
+  ignore_errors: true
+
+- name: Cleanup project
+  crystian.incus.incus_project:
+    name: "list-project"
+    remote: "{{ target_remote | default(omit) }}"
+    state: absent
+  ignore_errors: true

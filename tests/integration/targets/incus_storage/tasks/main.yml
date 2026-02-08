@@ -90,14 +90,34 @@
        size: "10MiB"
   register: vol_create
 
-# Can't set size on dir pool volume usually?
-# "Setting storage volume configuration is not supported for this driver" might happen for dir.
-# But let's try.
 
 - name: Assert volume create
   assert:
     that:
       - vol_create.changed == true
+
+- name: Resize volume
+  crystian.incus.incus_storage_volume:
+    pool: "test-pool"
+    name: "test-vol"
+    remote: "{{ target_remote | default(omit) }}"
+    config:
+       size: "20MiB"
+  register: vol_resize
+
+- name: Assert volume resize
+  assert:
+    that:
+      - vol_resize.changed == true
+
+- name: Verify volume size
+  command: "incus storage volume show test-pool test-vol {{ target_remote | default('local') }}:"
+  register: vol_show
+
+- name: Assert volume size config
+  assert:
+    that:
+      - "'size: 20MiB' in vol_show.stdout"
 
 - name: Create volume with schedule
   crystian.incus.incus_storage_volume:
@@ -286,7 +306,6 @@
     that:
       - pool_del.changed == true
 
-# ZFS Loop
 - name: Create storage pool (zfs loop)
   crystian.incus.incus_storage:
     name: "test-pool-zfs"
@@ -313,7 +332,6 @@
   when: pool_zfs_create is succeeded
   ignore_errors: true
 
-# Btrfs Loop
 - name: Create storage pool (btrfs loop)
   crystian.incus.incus_storage:
     name: "test-pool-btrfs"
@@ -339,7 +357,6 @@
   when: pool_btrfs_create is succeeded
   ignore_errors: true
 
-# LVM Loop
 - name: Create storage pool (lvm loop)
   crystian.incus.incus_storage:
     name: "test-pool-lvm"

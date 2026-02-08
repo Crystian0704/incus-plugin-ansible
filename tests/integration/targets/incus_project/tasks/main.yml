@@ -118,3 +118,63 @@
   assert:
     that:
       - project_delete.changed == true
+
+- name: Create project with limits
+  crystian.incus.incus_project:
+    name: "test-limits"
+    remote: "{{ target_remote | default(omit) }}"
+    config:
+      features.images: "false"
+      features.profiles: "false"
+      limits.containers: "1"
+    state: present
+
+- name: Create first instance (should succeed)
+  crystian.incus.incus_instance:
+    name: "inst1"
+    project: "test-limits"
+    remote: "{{ target_remote | default(omit) }}"
+    remote_image: "images:alpine/edge"
+    started: true
+    state: present
+  register: inst1
+
+- name: Assert first instance created
+  assert:
+    that:
+      - inst1.changed == true
+
+- name: Create second instance (should fail)
+  crystian.incus.incus_instance:
+    name: "inst2"
+    project: "test-limits"
+    remote: "{{ target_remote | default(omit) }}"
+    remote_image: "images:alpine/edge"
+    started: true
+    state: present
+  register: inst2
+  ignore_errors: true
+
+- name: Assert second instance failed
+  assert:
+    that:
+      - inst2.failed == true
+      - "'reached' in inst2.stderr or 'limit' in inst2.stderr"
+
+- name: Cleanup limit instances
+  crystian.incus.incus_instance:
+    name: "{{ item }}"
+    project: "test-limits"
+    remote: "{{ target_remote | default(omit) }}"
+    state: absent
+    force: true
+  loop:
+    - inst1
+    - inst2
+  ignore_errors: true
+
+- name: Cleanup limit project
+  crystian.incus.incus_project:
+    name: "test-limits"
+    remote: "{{ target_remote | default(omit) }}"
+    state: absent

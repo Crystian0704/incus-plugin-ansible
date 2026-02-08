@@ -3,3 +3,4 @@ __pycache__
 *.tar.gz
 collections/
 tests/output/
+tests/infra/.test_setup_complete
