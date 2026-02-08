@@ -78,8 +78,37 @@ ansible-galaxy collection install crystian-incus-1.0.0.tar.gz
 ```yaml
 - name: Upgrade packages
   crystian.incus.incus_exec:
-    instance: my-container
+    instance_name: my-container
     command: apt-get update && apt-get upgrade -y
+```
+
+### Configure Instance
+```yaml
+- name: Set memory limit
+  crystian.incus.incus_config:
+    instance_name: my-container
+    config:
+      limits.memory: 4GiB
+```
+
+### Manage Files
+```yaml
+- name: Push a file
+  crystian.incus.incus_file:
+    instance_name: my-container
+    src: /local/path/file.txt
+    dest: /remote/path/file.txt
+    state: pushed
+```
+
+### Snapshot Management
+```yaml
+- name: Create a snapshot
+  crystian.incus.incus_snapshot:
+    instance_name: my-container
+    snapshot_name: backup-snap
+    state: present
+
 ```
 
 
@@ -104,6 +133,9 @@ You can also run specific module tests using tags:
 ```bash
 # Test only incus_instance module
 ansible-playbook tests/integration.yml --tags incus_instance
+
+# Force infrastructure recreation
+ansible-playbook tests/integration.yml -e delete_infra=true
 ```
 
 ## Known Limitations
