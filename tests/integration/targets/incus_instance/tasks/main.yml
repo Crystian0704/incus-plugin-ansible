@@ -1,4 +1,17 @@
 ---
+- name: Cleanup instance test (manual)
+  command: "incus delete --force {{ target_remote | default('local') }}:{{ item }}"
+  loop:
+    - test-ansible-init
+    - test-ansible-launch
+    - test-ansible-renamed
+    - ct1
+    - test-complex-container
+    - test-complex-vm
+    - instance-to-delete
+    - instance-running-delete
+  ignore_errors: true
+
 - name: Test incus_instance (init behavior - stopped)
   crystian.incus.incus_instance:
     name: test-ansible-init
@@ -83,6 +96,13 @@
       - result_config_update.changed == true
       - result_config_update.instance.config['limits.cpu'] == "1"
 
+- name: Stop instance before rename
+  crystian.incus.incus_instance:
+    name: test-ansible-init
+    remote: "{{ target_remote | default(omit) }}"
+    state: present
+    started: false
+
 - name: Rename instance
   crystian.incus.incus_instance:
     name: test-ansible-renamed
@@ -99,7 +119,7 @@
 
 - name: Create snapshot for restore test
   crystian.incus.incus_snapshot:
-    instance: test-ansible-renamed
+    instance_name: test-ansible-renamed
     snapshot_name: snap0
     remote: "{{ target_remote | default(omit) }}"
     state: present
@@ -114,7 +134,7 @@
 
 - name: Restore from snapshot (using instance module if supported, or snapshot module)
   crystian.incus.incus_snapshot:
-    instance: test-ansible-renamed
+    instance_name: test-ansible-renamed
     snapshot_name: snap0
     remote: "{{ target_remote | default(omit) }}"
     state: restored
@@ -149,10 +169,10 @@
     - test-ansible-init
     - test-ansible-launch
 
-- name: Test incus_instance (remote target - kawa)
+- name: Test incus_instance (remote target)
   crystian.incus.incus_instance:
     name: ct1
-    remote: kawa
+    remote: "{{ target_remote | default('local') }}"
     remote_image: images:debian/13
     started: true
   register: result_remote
@@ -167,7 +187,7 @@
 - name: Cleanup remote test
   crystian.incus.incus_instance:
     name: ct1
-    remote: kawa
+    remote: "{{ target_remote | default('local') }}"
     state: absent
     force: true
 

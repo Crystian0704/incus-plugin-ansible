@@ -9,7 +9,7 @@ Designed to follow Ansible's `copy`, `fetch`, and `file` nomenclature.
 
 | Parameter | Required | Default | Choices | Description |
 |---|---|---|---|---|
-| `name` | True |  |  | Name of the instance. |
+| `instance_name` | True |  |  | Name of the instance. |
 | `state` | False | pushed | ['pushed', 'pulled', 'absent'] | State of the file. {'pushed': "Push a local file ('src') or content ('content') to the instance ('dest')."} {'pulled': "Pull a file from the instance ('src') to local destination ('dest')."} {'absent': "Delete a file from the instance ('dest')."} |
 | `src` | False |  |  | Source path. {"If state='pushed'": 'Local path to the file to push.'} {"If state='pulled'": 'Remote path inside the instance.'} |
 | `dest` | False |  |  | Destination path. {"If state='pushed'": 'Remote path inside the instance.'} {"If state='pulled'": 'Local destination path.'} {"If state='absent'": 'Remote path to delete.'} |
@@ -25,7 +25,7 @@ Designed to follow Ansible's `copy`, `fetch`, and `file` nomenclature.
 ```yaml
 - name: Push a local file (copy style)
   crystian.incus.incus_file:
-    name: my-container
+    instance_name: my-container
     src: /tmp/local_file.txt
     dest: /root/remote_file.txt
     owner: root
@@ -34,19 +34,19 @@ Designed to follow Ansible's `copy`, `fetch`, and `file` nomenclature.
     state: pushed
 - name: Push content directly
   crystian.incus.incus_file:
-    name: my-container
+    instance_name: my-container
     content: "Hello from Ansible"
     dest: /root/hello.txt
     state: pushed
 - name: Pull a file (fetch style)
   crystian.incus.incus_file:
-    name: my-container
+    instance_name: my-container
     src: /etc/hosts
     dest: /tmp/container_hosts
     state: pulled
 - name: Delete a file (file style)
   crystian.incus.incus_file:
-    name: my-container
+    instance_name: my-container
     dest: /tmp/garbage.txt
     state: absent
 ```

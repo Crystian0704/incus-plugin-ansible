@@ -8,7 +8,7 @@ Create, delete, restore, or rename snapshots of Incus instances.
 
 | Parameter | Required | Default | Choices | Description |
 |---|---|---|---|---|
-| `instance` | True |  |  | Name of the instance. |
+| `instance_name` | True |  |  | Name of the instance. |
 | `snapshot_name` | True |  |  | Name of the snapshot. Required for most operations except some list scenarios (though not implemented here). |
 | `state` | False | present | ['present', 'absent', 'restored', 'renamed'] | State of the snapshot. {'present': 'Create a snapshot.'} {'absent': 'Delete a snapshot.'} {'restored': 'Restore the instance from this snapshot.'} {'renamed': "Rename the snapshot (requires 'new_name')."} |
 | `new_name` | False |  |  | New name for the snapshot (used with state='renamed'). |
@@ -23,29 +23,29 @@ Create, delete, restore, or rename snapshots of Incus instances.
 ```yaml
 - name: Create a snapshot
   crystian.incus.incus_snapshot:
-    instance: my-container
+    instance_name: my-container
     snapshot_name: snap0
     state: present
 - name: Create a stateful snapshot (VM only)
   crystian.incus.incus_snapshot:
-    instance: my-vm
+    instance_name: my-vm
     snapshot_name: state-snap
     stateful: true
     state: present
 - name: Restore a snapshot
   crystian.incus.incus_snapshot:
-    instance: my-container
+    instance_name: my-container
     snapshot_name: snap0
     state: restored
 - name: Rename a snapshot
   crystian.incus.incus_snapshot:
-    instance: my-container
+    instance_name: my-container
     snapshot_name: snap0
     new_name: snap-initial
     state: renamed
 - name: Delete a snapshot
   crystian.incus.incus_snapshot:
-    instance: my-container
+    instance_name: my-container
     snapshot_name: snap0
     state: absent
 ```

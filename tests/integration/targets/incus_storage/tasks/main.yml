@@ -111,7 +111,7 @@
       - vol_resize.changed == true
 
 - name: Verify volume size
-  command: "incus storage volume show test-pool test-vol {{ target_remote | default('local') }}:"
+  command: "incus storage volume show {{ target_remote | default('local') }}:test-pool test-vol"
   register: vol_show
 
 - name: Assert volume size config

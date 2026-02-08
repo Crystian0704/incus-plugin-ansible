@@ -144,6 +144,31 @@ class IncusImage(object):
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = p.communicate()
         return p.returncode, stdout.decode('utf-8'), stderr.decode('utf-8')
+
+    def manage_aliases(self, fingerprint, existing_aliases=None):
+        if not self.aliases:
+            return False
+        
+        changed = False
+        current_names = [a['name'] for a in existing_aliases] if existing_aliases else []
+        
+        for alias in self.aliases:
+            if alias not in current_names:
+                target_alias = alias
+                if self.remote and self.remote != 'local':
+                     target_alias = "{}:{}".format(self.remote, alias)
+                
+                cmd = ['image', 'alias', 'create', target_alias, fingerprint]
+                
+                if self.module.check_mode:
+                    changed = True
+                    continue
+                
+                rc, out, err = self.run_incus(cmd)
+                if rc != 0:
+                    self.module.fail_json(msg="Failed to create alias: " + err)
+                changed = True
+        return changed
     def get_image_info(self, identifier):
         search_term = identifier
         if self.remote and self.remote != 'local':
@@ -210,7 +235,17 @@ class IncusImage(object):
                     self.module.fail_json(msg="Failed to copy image: " + err, stdout=out, stderr=err)
                 self.module.exit_json(changed=True, msg="Image copied from remote")
         else:
-            self.module.exit_json(changed=False, msg="Image already exists", fingerprint=info['fingerprint'])
+            aliases_changed = self.manage_aliases(info['fingerprint'], info.get('aliases', []))
+            self.module.exit_json(changed=aliases_changed, msg="Image already exists", fingerprint=info['fingerprint'])
+
+        if self.module.check_mode:
+             self.module.exit_json(changed=True, msg="Image would be created")
+
+        info = self.get_image_info(target_alias)
+        if info:
+             self.manage_aliases(info['fingerprint'], info.get('aliases', []))
+        
+        self.module.exit_json(changed=True, msg="Image created")
     def absent(self):
         target_alias = self.alias
         if self.remote and self.remote != 'local':

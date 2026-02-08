@@ -31,6 +31,7 @@ Combines functionality of 'incus init' and 'incus launch'.
 | `network_config` | False |  |  | Cloud-init network-config content. Sets 'cloud-init.network-config' config option. |
 | `vendor_data` | False |  |  | Cloud-init vendor-data content. Sets 'cloud-init.vendor-data' config option. |
 | `cloud_init_disk` | False | False |  | If true, attaches a 'cloud-init' disk device (source=cloud-init:config). Required for VMs without incus-agent or specific images. |
+| `rename_from` | False |  |  | Name of an existing instance to rename to 'name'. |
 
 ## Examples
 

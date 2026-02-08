@@ -10,12 +10,12 @@ description:
   - Execute commands inside Incus instances (containers and VMs) using the `incus exec` command.
 version_added: "1.0.0"
 options:
-  name:
+  instance_name:
     description:
       - Name of the instance to execute command in.
     required: true
     type: str
-    aliases: [ instance ]
+    aliases: [ name, instance ]
   command:
     description:
       - The command to execute.
@@ -71,16 +71,16 @@ author:
 EXAMPLES = r'''
 - name: Run a simple command
   crystian.incus.incus_exec:
-    name: my-container
+    instance_name: my-container
     command: uptime
 - name: Run as specific user
   crystian.incus.incus_exec:
-    name: my-container
+    instance_name: my-container
     command: whoami
     user: 1000
 - name: Run in specific directory with env vars
   crystian.incus.incus_exec:
-    name: my-container
+    instance_name: my-container
     command: ls -la
     cwd: /var/log
     env:
@@ -110,7 +110,7 @@ import shlex
 def main():
     module = AnsibleModule(
         argument_spec=dict(
-            name=dict(type='str', required=True, aliases=['instance']),
+            instance_name=dict(type='str', required=True, aliases=['name', 'instance']),
             command=dict(type='raw', required=True),
             remote=dict(type='str', default='local', required=False),
             project=dict(type='str', default='default', required=False),
@@ -122,7 +122,7 @@ def main():
         ),
         supports_check_mode=True,
     )
-    name = module.params['name']
+    name = module.params['instance_name']
     command_param = module.params['command']
     remote = module.params['remote']
     project = module.params['project']

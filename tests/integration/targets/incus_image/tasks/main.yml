@@ -31,10 +31,23 @@
     that:
       - img_copy_idemp.changed == false
 
+- name: Export image
+  crystian.incus.incus_image:
+    alias: "test-alpine"
+    dest: "/tmp/exported_image"
+    remote: "{{ target_remote | default(omit) }}"
+    state: exported
+  register: img_export
+
+- name: Assert export
+  assert:
+    that:
+      - img_export.changed == true
+
 - name: Add alias to image
   crystian.incus.incus_image:
-    alias: "test-alias-extra"
-    source: "test-alpine"
+    alias: "test-alpine"
+    aliases: ["test-alias-extra"]
     remote: "{{ target_remote | default(omit) }}"
     state: present
   register: img_alias
@@ -66,30 +79,9 @@
       - img_alias_del.changed == true
 
 
-- name: Export image
-  crystian.incus.incus_image:
-    alias: "test-alpine"
-    dest: "/tmp/exported_image"
-    remote: "{{ target_remote | default(omit) }}"
-    state: exported
-  register: img_export
 
-- name: Assert export
-  assert:
-    that:
-      - img_export.changed == true
 
-- name: Delete image
-  crystian.incus.incus_image:
-    alias: "test-alpine"
-    remote: "{{ target_remote | default(omit) }}"
-    state: absent
-  register: img_del
 
-- name: Assert delete
-  assert:
-    that:
-      - img_del.changed == true
 
 - name: Import image from file
   crystian.incus.incus_image:

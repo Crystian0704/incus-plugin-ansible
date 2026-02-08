@@ -161,10 +161,10 @@ class IncusProfile(object):
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, stdin=subprocess.PIPE, env=env)
         stdout, stderr = p.communicate(input=input_data.encode('utf-8'))
         return p.returncode, stdout.decode('utf-8'), stderr.decode('utf-8')
-    def get_profile(self):
-        target = self.name
+    def get_profile(self, name=None):
+        target = name if name else self.name
         if self.remote and self.remote != 'local':
-            target = "{}:{}".format(self.remote, self.name)
+            target = "{}:{}".format(self.remote, target)
         rc, out, err = self.run_incus(['profile', 'show', target], check_rc=False)
         if rc == 0:
             try:
@@ -172,8 +172,10 @@ class IncusProfile(object):
             except:
                 pass
         return None
+
     def exists(self):
         return self.get_profile() is not None
+
     def create(self):
         target = self.name
         if self.remote and self.remote != 'local':
@@ -182,11 +184,28 @@ class IncusProfile(object):
         if rc != 0:
              self.module.fail_json(msg="Failed to create profile: " + err, stdout=out, stderr=err)
         self.update(new_create=True)
+
+    def rename(self):
+        target = self.name
+        source = self.rename_from
+        if self.remote and self.remote != 'local':
+            source = "{}:{}".format(self.remote, source)
+        
+        if self.module.check_mode:
+             self.module.exit_json(changed=True, msg="Profile would be renamed")
+        
+        rc, out, err = self.run_incus(['profile', 'rename', source, target], check_rc=False)
+        if rc != 0:
+             self.module.fail_json(msg="Failed to rename profile: " + err, stdout=out, stderr=err)
+        self.module.exit_json(changed=True, msg="Profile renamed")
+
     def update(self, new_create=False):
         current = self.get_profile()
         if not current:
             self.module.fail_json(msg="Profile not found for update")
+        
         desired = self.get_desired_state(current_profile=current)
+        
         updated = False
         if current.get('description') != desired.get('description'):
             updated = True
@@ -194,31 +213,54 @@ class IncusProfile(object):
             updated = True
         if current.get('devices') != desired.get('devices'):
             updated = True
+            
         if not updated and not new_create:
             self.module.exit_json(changed=False, msg="Profile matches configuration")
+        
         if self.module.check_mode:
             self.module.exit_json(changed=True, msg="Profile would be updated")
+            
         target = self.name
         if self.remote and self.remote != 'local':
             target = "{}:{}".format(self.remote, self.name)
+            
         yaml_content = yaml.dump(desired)
         rc, out, err = self.run_incus_input(['profile', 'edit', target], yaml_content)
         if rc != 0:
              self.module.fail_json(msg="Failed to update profile: " + err, stdout=out, stderr=err)
+        
         self.module.exit_json(changed=True, msg="Profile updated")
+
     def delete(self):
         target = self.name
         if self.remote and self.remote != 'local':
             target = "{}:{}".format(self.remote, self.name)
+            
         if self.module.check_mode:
              self.module.exit_json(changed=True, msg="Profile would be deleted")
+             
         rc, out, err = self.run_incus(['profile', 'delete', target], check_rc=False)
         if rc != 0:
              self.module.fail_json(msg="Failed to delete profile: " + err, stdout=out, stderr=err)
         self.module.exit_json(changed=True, msg="Profile deleted")
+
     def run(self):
-        profile = self.get_profile()
         if self.state == 'present':
+            if self.rename_from:
+                source_profile = self.get_profile(self.rename_from)
+                target_profile = self.get_profile(self.name)
+                
+                if source_profile and not target_profile:
+                    self.rename()
+                    return
+                elif source_profile and target_profile:
+                    pass
+                elif not source_profile and target_profile:
+                    pass
+                else:
+                    self.module.fail_json(msg="Source profile '{}' for rename not found".format(self.rename_from))
+
+            profile = self.get_profile()
             if not profile:
                 if self.module.check_mode:
                     self.module.exit_json(changed=True, msg="Profile would be created")
@@ -226,6 +268,7 @@ class IncusProfile(object):
             else:
                 self.update()
         elif self.state == 'absent':
+             profile = self.get_profile()
              if profile:
                  self.delete()
              else:

@@ -12,11 +12,12 @@ description:
   - Useful for modifying running instances or managing complex device setups.
 version_added: "1.0.0"
 options:
-  name:
+  instance_name:
     description:
       - Name of the instance.
     required: true
     type: str
+    aliases: [ name ]
   remote:
     description:
       - Remote server to target (e.g., 'myremote').
@@ -50,12 +51,12 @@ author:
 EXAMPLES = r'''
 - name: Set memory limit
   crystian.incus.incus_config:
-    name: my-container
+    instance_name: my-container
     config:
       limits.memory: 2GiB
 - name: Add a network device
   crystian.incus.incus_config:
-    name: my-container
+    instance_name: my-container
     devices:
       eth1:
         type: nic
@@ -63,19 +64,19 @@ EXAMPLES = r'''
         parent: incusbr0
 - name: Update device MTU
   crystian.incus.incus_config:
-    name: my-container
+    instance_name: my-container
     devices:
       eth1:
         mtu: 1400
 - name: Remove configuration
   crystian.incus.incus_config:
-    name: my-container
+    instance_name: my-container
     state: absent
     config:
       - limits.memory
 - name: Remove device
   crystian.incus.incus_config:
-    name: my-container
+    instance_name: my-container
     state: absent
     devices:
       - eth1
@@ -88,7 +89,7 @@ import json
 class IncusConfig(object):
     def __init__(self, module):
         self.module = module
-        self.name_param = module.params['name']
+        self.name_param = module.params['instance_name']
         self.remote = module.params['remote']
         self.state = module.params['state']
         self.config = module.params['config']
@@ -206,7 +207,7 @@ class IncusConfig(object):
 def main():
     module = AnsibleModule(
         argument_spec=dict(
-            name=dict(type='str', required=True),
+            instance_name=dict(type='str', required=True, aliases=['name']),
             remote=dict(type='str', required=False),
             state=dict(type='str', choices=['present', 'absent'], default='present'),
             config=dict(type='raw', required=False),

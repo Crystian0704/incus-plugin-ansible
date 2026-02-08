@@ -5,6 +5,28 @@
     state: absent
   ignore_errors: true
 
+- name: Cleanup profile source test
+  crystian.incus.incus_profile:
+    name: "test-profile-source"
+    remote: "{{ target_remote | default(omit) }}"
+    state: absent
+  ignore_errors: true
+
+- name: Cleanup profile renamed test
+  crystian.incus.incus_profile:
+    name: "test-profile-renamed"
+    remote: "{{ target_remote | default(omit) }}"
+    state: absent
+  ignore_errors: true
+
+- name: Cleanup profile instance test
+  crystian.incus.incus_instance:
+    name: "test-profile-instance"
+    remote: "{{ target_remote | default(omit) }}"
+    state: absent
+    force: true
+  ignore_errors: true
+
 - name: Create profile
   crystian.incus.incus_profile:
     name: "test-profile"
@@ -77,6 +99,10 @@
           type: nic
           network: incusbr0
           name: eth0
+        root:
+          path: /
+          pool: default
+          type: disk
 
 - name: Create profile from source
   crystian.incus.incus_profile:

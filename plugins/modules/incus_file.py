@@ -11,12 +11,12 @@ description:
   - Designed to follow Ansible's `copy`, `fetch`, and `file` nomenclature.
 version_added: "1.0.0"
 options:
-  name:
+  instance_name:
     description:
       - Name of the instance.
     required: true
     type: str
-    aliases: [ instance ]
+    aliases: [ name, instance ]
   state:
     description:
       - State of the file.
@@ -86,7 +86,7 @@ author:
 EXAMPLES = r'''
 - name: Push a local file (copy style)
   crystian.incus.incus_file:
-    name: my-container
+    instance_name: my-container
     src: /tmp/local_file.txt
     dest: /root/remote_file.txt
     owner: root
@@ -95,19 +95,19 @@ EXAMPLES = r'''
     state: pushed
 - name: Push content directly
   crystian.incus.incus_file:
-    name: my-container
+    instance_name: my-container
     content: "Hello from Ansible"
     dest: /root/hello.txt
     state: pushed
 - name: Pull a file (fetch style)
   crystian.incus.incus_file:
-    name: my-container
+    instance_name: my-container
     src: /etc/hosts
     dest: /tmp/container_hosts
     state: pulled
 - name: Delete a file (file style)
   crystian.incus.incus_file:
-    name: my-container
+    instance_name: my-container
     dest: /tmp/garbage.txt
     state: absent
 '''
@@ -125,7 +125,7 @@ import shutil
 class IncusFile(object):
     def __init__(self, module):
         self.module = module
-        self.name = module.params['name']
+        self.name = module.params['instance_name']
         self.state = module.params['state']
         self.src = module.params['src']
         self.dest = module.params['dest']
@@ -236,7 +236,7 @@ class IncusFile(object):
 def main():
     module = AnsibleModule(
         argument_spec=dict(
-            name=dict(type='str', required=True, aliases=['instance']),
+            instance_name=dict(type='str', required=True, aliases=['name', 'instance']),
             state=dict(type='str', default='pushed', choices=['pushed', 'pulled', 'absent']),
             src=dict(type='path', required=False),
             dest=dict(type='path', required=False, aliases=['path']),

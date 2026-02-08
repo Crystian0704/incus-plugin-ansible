@@ -10,7 +10,7 @@ Useful for modifying running instances or managing complex device setups.
 
 | Parameter | Required | Default | Choices | Description |
 |---|---|---|---|---|
-| `name` | True |  |  | Name of the instance. |
+| `instance_name` | True |  |  | Name of the instance. |
 | `remote` | False |  |  | Remote server to target (e.g., 'myremote'). |
 | `state` | False | present | ['present', 'absent'] | ensuring 'present' will update config/devices to match provided values. ensuring 'absent' will remove the specified config keys or devices. |
 | `config` | False |  |  | Dictionary of configuration options. If state=present, sets these values. If state=absent, removes these keys (values are ignored, can be list of keys or dict). |
@@ -21,12 +21,12 @@ Useful for modifying running instances or managing complex device setups.
 ```yaml
 - name: Set memory limit
   crystian.incus.incus_config:
-    name: my-container
+    instance_name: my-container
     config:
       limits.memory: 2GiB
 - name: Add a network device
   crystian.incus.incus_config:
-    name: my-container
+    instance_name: my-container
     devices:
       eth1:
         type: nic
@@ -34,19 +34,19 @@ Useful for modifying running instances or managing complex device setups.
         parent: incusbr0
 - name: Update device MTU
   crystian.incus.incus_config:
-    name: my-container
+    instance_name: my-container
     devices:
       eth1:
         mtu: 1400
 - name: Remove configuration
   crystian.incus.incus_config:
-    name: my-container
+    instance_name: my-container
     state: absent
     config:
       - limits.memory
 - name: Remove device
   crystian.incus.incus_config:
-    name: my-container
+    instance_name: my-container
     state: absent
     devices:
       - eth1

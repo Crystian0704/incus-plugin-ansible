@@ -139,6 +139,11 @@ options:
     type: bool
     default: false
     required: false
+  rename_from:
+    description:
+      - Name of an existing instance to rename to 'name'.
+    type: str
+    required: false
 author:
   - "Antigravity"
 '''
@@ -174,12 +179,11 @@ class IncusInstance(object):
     def __init__(self, module):
         self.module = module
         self.name_param = module.params['name']
+        self.rename_from = module.params.get('rename_from')
         self.remote = module.params['remote']
         self.remote_image = module.params['remote_image']
         self.state = module.params['state']
         self.empty = module.params.get('empty', False)
-        if self.state == 'present' and not self.empty and not self.remote_image:
-            self.module.fail_json(msg="remote_image is required when creating or updating an instance (state=present)")
         self.name = self.name_param
         if self.remote:
             self.name = "{}:{}".format(self.remote, self.name_param)
@@ -216,6 +220,12 @@ class IncusInstance(object):
                 self.devices['cloud-init'] = {'type': 'disk', 'source': 'cloud-init:config'}
         self.incus_path = module.get_bin_path('incus', required=True)
     def _run_command(self, cmd, check_rc=True):
+        if self.project and self.project != 'default':
+            # Inject --project flag after the incus binary
+            # Assuming cmd[0] is the binary
+            if '--project' not in cmd:
+                 cmd.insert(1, self.project)
+                 cmd.insert(1, '--project')
         try:
             rc, out, err = self.module.run_command(cmd, check_rc=check_rc)
             if check_rc and rc != 0:
@@ -223,13 +233,21 @@ class IncusInstance(object):
             return rc, out, err
         except Exception as e:
             self.module.fail_json(msg="Command execution exception: %s" % str(e), cmd=cmd)
-    def get_instance_info(self):
-        instance_name = self.name
+    def get_instance_info(self, name=None):
+        instance_name = name if name else self.name
         prefix = ""
-        if ":" in self.name:
-             parts = self.name.split(':', 1)
+        if ":" in instance_name:
+             parts = instance_name.split(':', 1)
              prefix = parts[0] + ":"
              instance_name = parts[1]
+        elif not name and self.remote: # Use self.remote only if name is self.name (default)
+             prefix = self.remote + ":"
+
+        if name and ":" in name:
+             pass
+        elif name and self.remote:
+             prefix = self.remote + ":"
+        
         cmd = [self.incus_path, 'list', '--format=json', '{}^{}$'.format(prefix, instance_name)]
         rc, out, err = self._run_command(cmd, check_rc=False)
         if rc == 0:
@@ -240,8 +258,10 @@ class IncusInstance(object):
             except ValueError:
                 pass
             return None
-        self.module.fail_json(msg="Failed to get instance info", cmd=cmd, rc=rc, stdout=out, stderr=err)
+        return None
     def create_instance(self):
+        if not self.remote_image and not self.empty:
+             self.module.fail_json(msg="remote_image is required when creating an instance (state=present)")
         cmd = [self.incus_path, 'init', self.remote_image, self.name]
         if self.vm:
             cmd.append('--vm')
@@ -272,17 +292,21 @@ class IncusInstance(object):
         if self.description:
              cmd.extend(['--description', self.description])
         self._run_command(cmd)
+
     def start_instance(self):
         cmd = [self.incus_path, 'start', self.name]
         self._run_command(cmd)
+
     def stop_instance(self):
         cmd = [self.incus_path, 'stop', self.name]
         self._run_command(cmd)
+
     def delete_instance(self):
         cmd = [self.incus_path, 'delete', self.name]
         if self.force:
             cmd.append('--force')
         self._run_command(cmd)
+
     def get_instance_state(self):
         instance_name = self.name_param
         remote_prefix = ""
@@ -301,6 +325,7 @@ class IncusInstance(object):
             except ValueError:
                 pass
         return None
+
     def configure_devices(self):
         if not self.devices:
             return
@@ -317,9 +342,48 @@ class IncusInstance(object):
              for k, v in cfg.items():
                  cmd.append('{}={}'.format(k, v))
              self._run_command(cmd)
+
+    def configure_config(self):
+        if not self.config:
+            return False
+            
+        info = self.get_instance_info()
+        current_config = info.get('config', {}) if info else {}
+        changed = False
+        
+        for k, v in self.config.items():
+            if current_config.get(k) != str(v):
+                cmd = [self.incus_path, 'config', 'set', self.name, k, str(v)]
+                self._run_command(cmd)
+                changed = True
+        return changed
+
+    def rename_instance(self):
+        source = self.rename_from
+        target = self.name_param
+
+        if self.remote:
+            source = "{}:{}".format(self.remote, source)
+            target = "{}:{}".format(self.remote, target)
+        
+        cmd = [self.incus_path, 'move', source, target]
+        self._run_command(cmd)
+
     def run(self):
+        if self.state == 'present' and self.rename_from:
+             source_info = self.get_instance_info(self.rename_from)
+             target_info = self.get_instance_info()
+             
+             if source_info and not target_info:
+                 if self.module.check_mode:
+                     self.module.exit_json(changed=True, msg="Instance would be renamed")
+                 self.rename_instance()
+             elif not source_info and not target_info:
+                 self.module.fail_json(msg="Source instance '{}' for rename not found".format(self.rename_from))
+             
         info = self.get_instance_info()
         changed = False
+
         if self.state == 'absent':
             if info:
                 if self.module.check_mode:
@@ -329,6 +393,7 @@ class IncusInstance(object):
                 self.module.exit_json(changed=changed, instance=None, state=None)
             else:
                 self.module.exit_json(changed=False, msg="Instance already absent")
+
         elif self.state == 'present':
             if not info:
                 if self.module.check_mode:
@@ -339,6 +404,11 @@ class IncusInstance(object):
                 info = self.get_instance_info()
                 if not info:
                      self.module.fail_json(msg="Instance created but could not be retrieved.", name=self.name)
+            else:
+                if self.configure_config():
+                    changed = True
+                self.configure_devices() 
+
             current_status = info['status'].lower()
             if self.started and current_status == 'stopped':
                  if self.module.check_mode:
@@ -350,8 +420,10 @@ class IncusInstance(object):
                      self.module.exit_json(changed=True, msg="Instance would be stopped")
                  self.stop_instance()
                  changed = True
+
             if changed:
                 info = self.get_instance_info()
+            
             state_info = self.get_instance_state()
             self.module.exit_json(changed=changed, instance=info, state=state_info)
 def main():
@@ -380,6 +452,7 @@ def main():
             cloud_init_network_config=dict(type='str', required=False),
             cloud_init_vendor_data=dict(type='str', required=False),
             cloud_init_disk=dict(type='bool', default=False, required=False),
+            rename_from=dict(type='str', required=False),
         ),
         supports_check_mode=True,
     )

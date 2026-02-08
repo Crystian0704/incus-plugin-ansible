@@ -19,7 +19,7 @@
 
 - name: Push content with owner/group
   crystian.incus.incus_file:
-    name: "test-file"
+    instance_name: "test-file"
     remote: "{{ target_remote | default(omit) }}"
     dest: "/root/test_content.txt"
     content: "content-data"
@@ -36,7 +36,7 @@
 
 - name: Verify content inside
   crystian.incus.incus_exec:
-    name: "test-file"
+    instance_name: "test-file"
     remote: "{{ target_remote | default(omit) }}"
     command: "cat /root/test_content.txt"
   register: verify_content
@@ -53,7 +53,7 @@
 
 - name: Push file
   crystian.incus.incus_file:
-    name: "test-file"
+    instance_name: "test-file"
     remote: "{{ target_remote | default(omit) }}"
     src: "/tmp/local_test_file.txt"
     dest: "/root/test_file.txt"
@@ -67,7 +67,7 @@
 
 - name: Verify file inside
   crystian.incus.incus_exec:
-    name: "test-file"
+    instance_name: "test-file"
     remote: "{{ target_remote | default(omit) }}"
     command: "cat /root/test_file.txt"
   register: verify_file
@@ -79,7 +79,7 @@
 
 - name: Pull file
   crystian.incus.incus_file:
-    name: "test-file"
+    instance_name: "test-file"
     remote: "{{ target_remote | default(omit) }}"
     src: "/root/test_content.txt"
     dest: "/tmp/pulled_content.txt"
@@ -102,7 +102,7 @@
 
 - name: Delete file
   crystian.incus.incus_file:
-    name: "test-file"
+    instance_name: "test-file"
     remote: "{{ target_remote | default(omit) }}"
     dest: "/root/test_content.txt"
     state: absent
@@ -115,7 +115,7 @@
 
 - name: Verify deleted
   crystian.incus.incus_exec:
-    name: "test-file"
+    instance_name: "test-file"
     remote: "{{ target_remote | default(omit) }}"
     command: "ls /root/test_content.txt"
   register: verify_delete
@@ -126,12 +126,7 @@
     that:
       - verify_delete.rc != 0
 
-- name: Cleanup (post-test)
-  crystian.incus.incus_instance:
-    name: "test-file"
-    remote: "{{ target_remote | default(omit) }}"
-    state: absent
-    force: true
+
 
 - name: Cleanup local files
   file:
@@ -154,7 +149,7 @@
 
 - name: Push directory (recursive)
   crystian.incus.incus_file:
-    name: "test-file"
+    instance_name: "test-file"
     remote: "{{ target_remote | default(omit) }}"
     src: /tmp/test_dir/
     dest: /root/remote_dir/
@@ -171,7 +166,7 @@
 
 - name: Update file permissions
   crystian.incus.incus_file:
-    name: "test-file"
+    instance_name: "test-file"
     remote: "{{ target_remote | default(omit) }}"
     dest: "/root/test_content.txt"
     content: "content-data"
@@ -186,7 +181,7 @@
 
 - name: Verify permissions
   crystian.incus.incus_exec:
-    name: "test-file"
+    instance_name: "test-file"
     remote: "{{ target_remote | default(omit) }}"
     command: "stat -c '%a' /root/test_content.txt"
   register: verify_perms
@@ -200,4 +195,11 @@
   file:
     path: /tmp/test_dir
     state: absent
+
+- name: Cleanup (final)
+  crystian.incus.incus_instance:
+    name: "test-file"
+    remote: "{{ target_remote | default(omit) }}"
+    state: absent
+    force: true
 

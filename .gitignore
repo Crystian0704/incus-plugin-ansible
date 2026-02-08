@@ -4,3 +4,4 @@ __pycache__
 collections/
 tests/output/
 tests/infra/.test_setup_complete
+test_output*.log

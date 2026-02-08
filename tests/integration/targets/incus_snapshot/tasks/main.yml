@@ -15,7 +15,7 @@
 
 - name: Create snapshot
   crystian.incus.incus_snapshot:
-    instance: "test-snap"
+    instance_name: "test-snap"
     snapshot: "snap0"
     remote: "{{ target_remote | default(omit) }}"
     state: present
@@ -28,7 +28,7 @@
 
 - name: Create duplicate scanpshot (no reuse)
   crystian.incus.incus_snapshot:
-    instance: "test-snap"
+    instance_name: "test-snap"
     snapshot: "snap0"
     remote: "{{ target_remote | default(omit) }}"
     state: present
@@ -42,7 +42,7 @@
 
 - name: Reuse snapshot
   crystian.incus.incus_snapshot:
-    instance: "test-snap"
+    instance_name: "test-snap"
     snapshot: "snap0"
     remote: "{{ target_remote | default(omit) }}"
     state: present
@@ -63,7 +63,7 @@
 
 - name: Rename snapshot
   crystian.incus.incus_snapshot:
-    instance: "test-snap"
+    instance_name: "test-snap"
     snapshot: "snap0"
     new_name: "snap-renamed"
     remote: "{{ target_remote | default(omit) }}"
@@ -77,7 +77,7 @@
 
 - name: Restore snapshot
   crystian.incus.incus_snapshot:
-    instance: "test-snap"
+    instance_name: "test-snap"
     snapshot: "snap-renamed"
     remote: "{{ target_remote | default(omit) }}"
     state: restored
@@ -90,7 +90,7 @@
 
 - name: Delete snapshot
   crystian.incus.incus_snapshot:
-    instance: "test-snap"
+    instance_name: "test-snap"
     snapshot: "snap-renamed"
     remote: "{{ target_remote | default(omit) }}"
     state: absent

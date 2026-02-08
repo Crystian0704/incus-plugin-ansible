@@ -8,7 +8,7 @@ Execute commands inside Incus instances (containers and VMs) using the `incus ex
 
 | Parameter | Required | Default | Choices | Description |
 |---|---|---|---|---|
-| `name` | True |  |  | Name of the instance to execute command in. |
+| `instance_name` | True |  |  | Name of the instance to execute command in. |
 | `command` | True |  |  | The command to execute. Can be a string or a list of arguments. |
 | `remote` | False | local |  | The remote server to execute on. Defaults to 'local'. |
 | `project` | False | default |  | The project the instance belongs to. Defaults to 'default'. |
@@ -23,16 +23,16 @@ Execute commands inside Incus instances (containers and VMs) using the `incus ex
 ```yaml
 - name: Run a simple command
   crystian.incus.incus_exec:
-    name: my-container
+    instance_name: my-container
     command: uptime
 - name: Run as specific user
   crystian.incus.incus_exec:
-    name: my-container
+    instance_name: my-container
     command: whoami
     user: 1000
 - name: Run in specific directory with env vars
   crystian.incus.incus_exec:
-    name: my-container
+    instance_name: my-container
     command: ls -la
     cwd: /var/log
     env:

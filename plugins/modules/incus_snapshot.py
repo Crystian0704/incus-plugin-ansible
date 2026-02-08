@@ -10,12 +10,12 @@ description:
   - Create, delete, restore, or rename snapshots of Incus instances.
 version_added: "1.0.0"
 options:
-  instance:
+  instance_name:
     description:
       - Name of the instance.
     required: true
     type: str
-    aliases: [ name ]
+    aliases: [ name, instance ]
   snapshot_name:
     description:
       - Name of the snapshot.
@@ -79,29 +79,29 @@ author:
 EXAMPLES = r'''
 - name: Create a snapshot
   crystian.incus.incus_snapshot:
-    instance: my-container
+    instance_name: my-container
     snapshot_name: snap0
     state: present
 - name: Create a stateful snapshot (VM only)
   crystian.incus.incus_snapshot:
-    instance: my-vm
+    instance_name: my-vm
     snapshot_name: state-snap
     stateful: true
     state: present
 - name: Restore a snapshot
   crystian.incus.incus_snapshot:
-    instance: my-container
+    instance_name: my-container
     snapshot_name: snap0
     state: restored
 - name: Rename a snapshot
   crystian.incus.incus_snapshot:
-    instance: my-container
+    instance_name: my-container
     snapshot_name: snap0
     new_name: snap-initial
     state: renamed
 - name: Delete a snapshot
   crystian.incus.incus_snapshot:
-    instance: my-container
+    instance_name: my-container
     snapshot_name: snap0
     state: absent
 '''
@@ -117,7 +117,7 @@ import json
 class IncusSnapshot(object):
     def __init__(self, module):
         self.module = module
-        self.instance = module.params['instance']
+        self.instance = module.params['instance_name']
         self.snapshot_name = module.params['snapshot_name']
         self.state = module.params['state']
         self.new_name = module.params['new_name']
@@ -248,7 +248,7 @@ class IncusSnapshot(object):
 def main():
     module = AnsibleModule(
         argument_spec=dict(
-            instance=dict(type='str', required=True, aliases=['name']),
+            instance_name=dict(type='str', required=True, aliases=['name', 'instance']),
             snapshot_name=dict(type='str', required=False, aliases=['snapshot']),
             state=dict(type='str', default='present', choices=['present', 'absent', 'restored', 'renamed']),
             new_name=dict(type='str', required=False),

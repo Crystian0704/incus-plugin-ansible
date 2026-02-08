@@ -19,7 +19,7 @@
 
 - name: Simple command execution
   crystian.incus.incus_exec:
-    name: "test-exec"
+    instance_name: "test-exec"
     remote: "{{ target_remote | default(omit) }}"
     command: "echo hello world"
   register: exec_simple
@@ -32,7 +32,7 @@
 
 - name: List command execution
   crystian.incus.incus_exec:
-    name: "test-exec"
+    instance_name: "test-exec"
     remote: "{{ target_remote | default(omit) }}"
     command: ['echo', 'list', 'args']
   register: exec_list
@@ -45,7 +45,7 @@
 
 - name: Env var execution
   crystian.incus.incus_exec:
-    name: "test-exec"
+    instance_name: "test-exec"
     remote: "{{ target_remote | default(omit) }}"
     command: "env"
     env:
@@ -60,7 +60,7 @@
 
 - name: CWD execution
   crystian.incus.incus_exec:
-    name: "test-exec"
+    instance_name: "test-exec"
     remote: "{{ target_remote | default(omit) }}"
     command: "pwd"
     cwd: "/tmp"
@@ -72,6 +72,10 @@
       - exec_cwd.rc == 0
       - "'/tmp' in exec_cwd.stdout"
 
+- name: Cleanup test-exec
+  crystian.incus.incus_instance:
+    name: "test-exec"
+    remote: "{{ target_remote | default(omit) }}"
     state: absent
     force: true
 
@@ -88,7 +92,7 @@
 
 - name: Execute failing command
   crystian.incus.incus_exec:
-    name: "test-exec-fail"
+    instance_name: "test-exec-fail"
     remote: "{{ target_remote | default(omit) }}"
     command: "ls /nonexistent"
   register: exec_fail
