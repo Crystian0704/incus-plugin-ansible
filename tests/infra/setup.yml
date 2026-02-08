@@ -88,8 +88,6 @@
         command: "incus admin init --minimal"
       when: incus_info.rc != 0
     
-
-
     - name: Config bind address
       crystian.incus.incus_exec:
         instance_name: "{{ vm_name }}"

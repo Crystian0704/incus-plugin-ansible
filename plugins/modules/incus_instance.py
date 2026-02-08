@@ -72,11 +72,7 @@ options:
     type: bool
     required: false
     default: false
-  type:
-    description:
-      - Instance type (e.g. 'c1.micro').
-    type: str
-    required: false
+
   profiles:
     description:
       - List of profiles to apply to the instance.
@@ -198,7 +194,7 @@ class IncusInstance(object):
         self.devices = module.params['devices'] or {}
         self.storage = module.params['storage']
         self.network = module.params['network']
-        self.type = module.params['type']
+
         self.target = module.params['target']
         self.description = module.params['description']
         self.empty = module.params.get('empty', False)
@@ -278,12 +274,6 @@ class IncusInstance(object):
              cmd.extend(['--network', self.network])
         if self.storage:
              cmd.extend(['--storage', self.storage])
-        if self.type == 'virtual-machine':
-             cmd.append('--vm')
-        elif self.type == 'container':
-             pass
-        elif self.type:
-             cmd.extend(['--type', self.type])
         if self.target:
              cmd.extend(['--target', self.target])
         if self.config:
@@ -439,7 +429,7 @@ def main():
             empty=dict(type='bool', default=False),
             ephemeral=dict(type='bool', default=False),
             vm=dict(type='bool', default=False),
-            type=dict(type='str', required=False),
+
             profiles=dict(type='list', elements='str', required=False),
             no_profiles=dict(type='bool', default=False),
             network=dict(type='str', required=False),

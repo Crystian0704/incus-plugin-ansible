@@ -67,7 +67,7 @@ ansible-galaxy collection install crystian-incus-1.0.0.tar.gz
   crystian.incus.incus_instance:
     name: my-vm
     remote_image: images:debian/12
-    type: virtual-machine
+    vm: true
     config:
       limits.cpu: 2
       limits.memory: 2GiB

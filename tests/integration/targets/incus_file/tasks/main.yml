@@ -126,8 +126,6 @@
     that:
       - verify_delete.rc != 0
 
-
-
 - name: Cleanup local files
   file:
     path: "{{ item }}"
