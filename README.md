@@ -74,6 +74,24 @@ ansible-galaxy collection install crystian-incus-1.0.0.tar.gz
     state: present
 ```
 
+### Create Instance with Cloud-Init
+```yaml
+- name: Create a web server
+  crystian.incus.incus_instance:
+    name: my-web-server
+    remote_image: images:ubuntu/22.04/cloud
+    cloud_init_user_data: |
+      #cloud-config
+      package_upgrade: true
+      packages:
+        - nginx
+    cloud_init_network_config: |
+      version: 2
+      ethernets:
+        eth0:
+          dhcp4: true
+```
+
 ### Execute Command
 ```yaml
 - name: Upgrade packages

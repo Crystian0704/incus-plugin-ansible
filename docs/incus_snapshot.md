@@ -10,7 +10,7 @@ Create, delete, restore, or rename snapshots of Incus instances.
 |---|---|---|---|---|
 | `instance_name` | True |  |  | Name of the instance. |
 | `snapshot_name` | True |  |  | Name of the snapshot. Required for most operations except some list scenarios (though not implemented here). |
-| `state` | False | present | ['present', 'absent', 'restored', 'renamed'] | State of the snapshot. {'present': 'Create a snapshot.'} {'absent': 'Delete a snapshot.'} {'restored': 'Restore the instance from this snapshot.'} {'renamed': "Rename the snapshot (requires 'new_name')."} |
+| `state` | False | present | ['present', 'absent', 'restored', 'renamed'] | State of the snapshot. present: Create a snapshot. absent: Delete a snapshot. restored: Restore the instance from this snapshot. renamed: Rename the snapshot (requires 'new_name'). |
 | `new_name` | False |  |  | New name for the snapshot (used with state='renamed'). |
 | `expires` | False |  |  | Expiry date for the snapshot (e.g. '30d'). Used only when creating (state='present'). |
 | `reuse` | False | False |  | Whether to overwrite an existing snapshot with the same name. Used only when state='present'. |

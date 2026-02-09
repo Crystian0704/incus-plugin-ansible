@@ -37,8 +37,8 @@ options:
   state:
     description:
       - State of the instance.
-      - 'present': Ensure instance exists (and started/stopped based on 'started' param).
-      - 'absent': Ensure instance is removed.
+      - "present: Ensure instance exists (and started/stopped based on 'started' param)."
+      - "absent: Ensure instance is removed."
     type: str
     choices: ['present', 'absent']
     default: present
@@ -110,19 +110,19 @@ options:
       - Key/value pairs for device configuration.
     type: dict
     required: false
-  user_data:
+  cloud_init_user_data:
     description:
       - Cloud-init user-data content.
       - Sets 'cloud-init.user-data' config option.
     type: str
     required: false
-  network_config:
+  cloud_init_network_config:
     description:
       - Cloud-init network-config content.
       - Sets 'cloud-init.network-config' config option.
     type: str
     required: false
-  vendor_data:
+  cloud_init_vendor_data:
     description:
       - Cloud-init vendor-data content.
       - Sets 'cloud-init.vendor-data' config option.
@@ -148,7 +148,7 @@ EXAMPLES = r'''
   crystian.incus.incus_instance:
     name: my-web-server
     remote_image: images:ubuntu/22.04/cloud
-    user_data: |
+    cloud_init_user_data: |
       #cloud-config
       package_upgrade: true
       packages:
@@ -159,7 +159,7 @@ EXAMPLES = r'''
     remote_image: images:debian/12/cloud
     vm: true
     cloud_init_disk: true
-    user_data: "{{ lookup('file', 'user-data.yml') }}"
+    cloud_init_user_data: "{{ lookup('file', 'user-data.yml') }}"
 '''
 RETURN = r'''
 instance:

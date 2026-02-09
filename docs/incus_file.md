@@ -10,9 +10,9 @@ Designed to follow Ansible's `copy`, `fetch`, and `file` nomenclature.
 | Parameter | Required | Default | Choices | Description |
 |---|---|---|---|---|
 | `instance_name` | True |  |  | Name of the instance. |
-| `state` | False | pushed | ['pushed', 'pulled', 'absent'] | State of the file. {'pushed': "Push a local file ('src') or content ('content') to the instance ('dest')."} {'pulled': "Pull a file from the instance ('src') to local destination ('dest')."} {'absent': "Delete a file from the instance ('dest')."} |
-| `src` | False |  |  | Source path. {"If state='pushed'": 'Local path to the file to push.'} {"If state='pulled'": 'Remote path inside the instance.'} |
-| `dest` | False |  |  | Destination path. {"If state='pushed'": 'Remote path inside the instance.'} {"If state='pulled'": 'Local destination path.'} {"If state='absent'": 'Remote path to delete.'} |
+| `state` | False | pushed | ['pushed', 'pulled', 'absent'] | State of the file. pushed: Push a local file ('src') or content ('content') to the instance ('dest'). pulled: Pull a file from the instance ('src') to local destination ('dest'). absent: Delete a file from the instance ('dest'). |
+| `src` | False |  |  | Source path. If state='pushed': Local path to the file to push. If state='pulled': Remote path inside the instance. |
+| `dest` | False |  |  | Destination path. If state='pushed': Remote path inside the instance. If state='pulled': Local destination path. If state='absent': Remote path to delete. |
 | `content` | False |  |  | Content to push to the file (when state=pushed). Mutually exclusive with 'src'. |
 | `owner` | False |  |  | Owner name or ID for the pushed file. If a name is provided, it is resolved inside the instance. |
 | `group` | False |  |  | Group name or ID for the pushed file. If a name is provided, it is resolved inside the instance. |

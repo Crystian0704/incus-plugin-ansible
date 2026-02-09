@@ -26,10 +26,10 @@ options:
   state:
     description:
       - State of the snapshot.
-      - 'present': Create a snapshot.
-      - 'absent': Delete a snapshot.
-      - 'restored': Restore the instance from this snapshot.
-      - 'renamed': Rename the snapshot (requires 'new_name').
+      - "present: Create a snapshot."
+      - "absent: Delete a snapshot."
+      - "restored: Restore the instance from this snapshot."
+      - "renamed: Rename the snapshot (requires 'new_name')."
     required: false
     type: str
     choices: [ present, absent, restored, renamed ]

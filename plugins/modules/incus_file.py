@@ -20,9 +20,9 @@ options:
   state:
     description:
       - State of the file.
-      - 'pushed': Push a local file ('src') or content ('content') to the instance ('dest').
-      - 'pulled': Pull a file from the instance ('src') to local destination ('dest').
-      - 'absent': Delete a file from the instance ('dest').
+      - "pushed: Push a local file ('src') or content ('content') to the instance ('dest')."
+      - "pulled: Pull a file from the instance ('src') to local destination ('dest')."
+      - "absent: Delete a file from the instance ('dest')."
     required: false
     type: str
     choices: [ pushed, pulled, absent ]
@@ -30,16 +30,16 @@ options:
   src:
     description:
       - Source path.
-      - If state='pushed': Local path to the file to push.
-      - If state='pulled': Remote path inside the instance.
+      - "If state='pushed': Local path to the file to push."
+      - "If state='pulled': Remote path inside the instance."
     required: false
     type: path
   dest:
     description:
       - Destination path.
-      - If state='pushed': Remote path inside the instance.
-      - If state='pulled': Local destination path.
-      - If state='absent': Remote path to delete.
+      - "If state='pushed': Remote path inside the instance."
+      - "If state='pulled': Local destination path."
+      - "If state='absent': Remote path to delete."
     required: false
     type: path
     aliases: [ path ]
