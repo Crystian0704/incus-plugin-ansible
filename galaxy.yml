@@ -15,12 +15,12 @@ tags:
   - virtualization
   - infrastructure
 dependencies: {}
-repository: https://github.com/Crystian0704/incus-plugin
-documentation: https://github.com/Crystian0704/incus-plugin/tree/main/docs
+repository: https://github.com/Crystian0704/incus-plugin-ansible
+documentation: https://github.com/Crystian0704/incus-plugin-ansible/tree/main/docs
 
-homepage: https://github.com/Crystian0704/incus-plugin
+homepage: https://github.com/Crystian0704/incus-plugin-ansible
 
-issues: https://github.com/Crystian0704/incus-plugin/issues
+issues: https://github.com/Crystian0704/incus-plugin-ansible/issues
 
 build_ignore:
   - generate_docs.py
