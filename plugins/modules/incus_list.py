@@ -10,7 +10,7 @@ description:
   - List Incus instances using the C(incus list) command.
   - Returns a list of instances with their configuration and state.
 author:
-  - "Antigravity"
+  - Crystian @Crystian0704
 options:
   filters:
     description:

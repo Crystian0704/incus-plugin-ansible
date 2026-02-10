@@ -66,7 +66,7 @@ options:
     default: non-interactive
     choices: [ interactive, non-interactive ]
 author:
-  - Crystian (@crystian)
+  - Crystian @Crystian0704
 '''
 EXAMPLES = r'''
 - name: Run a simple command

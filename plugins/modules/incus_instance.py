@@ -32,7 +32,7 @@ options:
       - If false, ensure instance is stopped.
       - Ignored if state is 'absent'.
     type: bool
-    default: true
+    default: false
     required: false
   state:
     description:
@@ -141,7 +141,7 @@ options:
     type: str
     required: false
 author:
-  - "Antigravity"
+  - Crystian @Crystian0704
 '''
 EXAMPLES = r'''
 - name: Create a container with cloud-init
@@ -360,6 +360,7 @@ class IncusInstance(object):
         self._run_command(cmd)
 
     def run(self):
+        changed = False
         if self.state == 'present' and self.rename_from:
              source_info = self.get_instance_info(self.rename_from)
              target_info = self.get_instance_info()
@@ -368,11 +369,11 @@ class IncusInstance(object):
                  if self.module.check_mode:
                      self.module.exit_json(changed=True, msg="Instance would be renamed")
                  self.rename_instance()
+                 changed = True
              elif not source_info and not target_info:
                  self.module.fail_json(msg="Source instance '{}' for rename not found".format(self.rename_from))
              
         info = self.get_instance_info()
-        changed = False
 
         if self.state == 'absent':
             if info:
@@ -400,6 +401,8 @@ class IncusInstance(object):
                 self.configure_devices() 
 
             current_status = info['status'].lower()
+            
+            # Compatibility with 'started' boolean
             if self.started and current_status == 'stopped':
                  if self.module.check_mode:
                      self.module.exit_json(changed=True, msg="Instance would be started")
@@ -422,7 +425,7 @@ def main():
             name=dict(type='str', required=True),
             remote=dict(type='str', default='local', required=False),
             remote_image=dict(type='str', required=False),
-            started=dict(type='bool', default=True, required=False),
+            started=dict(type='bool', default=False, required=False),
             state=dict(type='str', choices=['present', 'absent'], default='present', required=False),
             force=dict(type='bool', default=False, required=False),
             description=dict(type='str', required=False),

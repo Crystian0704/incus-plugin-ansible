@@ -54,7 +54,7 @@ options:
     type: str
     default: local
 author:
-  - Crystian (@crystian)
+  - Crystian @Crystian0704
 '''
 EXAMPLES = r'''
 - name: Create a restricted project

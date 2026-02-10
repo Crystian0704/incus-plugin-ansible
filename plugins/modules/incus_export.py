@@ -61,7 +61,7 @@ options:
     type: str
     default: default
 author:
-  - Crystian (@crystian)
+  - Crystian @Crystian0704
 '''
 EXAMPLES = r'''
 - name: Export instance to file

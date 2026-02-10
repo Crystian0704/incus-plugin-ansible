@@ -59,7 +59,7 @@ options:
     required: false
     type: str
 author:
-  - Crystian (@crystian)
+  - Crystian @Crystian0704
 '''
 EXAMPLES = r'''
 - name: Add a remote using a token

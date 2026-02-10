@@ -12,7 +12,7 @@ Combines functionality of 'incus init' and 'incus launch'.
 | `name` | True |  |  | Name of the instance. |
 | `remote` | False |  |  | Remote server to create the instance on. |
 | `remote_image` | True |  |  | Image to use (e.g., 'images:debian/12'). |
-| `started` | False | True |  | If true, ensure instance is started. If false, ensure instance is stopped. Ignored if state is 'absent'. |
+| `started` | False | False |  | If true, ensure instance is started. If false, ensure instance is stopped. Ignored if state is 'absent'. |
 | `state` | False | present | ['present', 'absent'] | State of the instance. present: Ensure instance exists (and started/stopped based on 'started' param). absent: Ensure instance is removed. |
 | `force` | False | False |  | Force removal of running instances (only used when state='absent'). |
 | `description` | False |  |  | Description of the instance. |

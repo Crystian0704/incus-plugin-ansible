@@ -85,7 +85,7 @@ options:
     type: str
     default: default
 author:
-  - Crystian (@crystian)
+  - Crystian @Crystian0704
 '''
 EXAMPLES = r'''
 - name: Copy alpine image from images remote

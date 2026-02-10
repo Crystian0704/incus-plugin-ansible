@@ -46,7 +46,7 @@ options:
     type: raw
     required: false
 author:
-  - "Antigravity"
+  - Crystian @Crystian0704
 '''
 EXAMPLES = r'''
 - name: Set memory limit

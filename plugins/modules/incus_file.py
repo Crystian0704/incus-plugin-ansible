@@ -81,7 +81,7 @@ options:
     type: str
     default: default
 author:
-  - Crystian (@crystian)
+  - Crystian @Crystian0704
 '''
 EXAMPLES = r'''
 - name: Push a local file (copy style)
@@ -135,6 +135,7 @@ class IncusFile(object):
         self.mode = module.params['mode']
         self.remote = module.params['remote']
         self.project = module.params['project']
+        self.recursive = module.params['recursive']
         self.target = self.name
         if self.remote and self.remote != 'local':
             self.target = "{}:{}".format(self.remote, self.name)
@@ -181,6 +182,8 @@ class IncusFile(object):
         if not os.path.exists(source_path):
              self.module.fail_json(msg="Source file '{}' does not exist".format(source_path))
         cmd_args = ['file', 'push', source_path, "{}/{}".format(self.target, dest_path.lstrip('/'))]
+        if self.recursive:
+            cmd_args.insert(2, '--recursive')
         uid = self.resolve_id(self.owner, 'u')
         gid = self.resolve_id(self.group, 'g')
         if uid is not None:
@@ -205,6 +208,8 @@ class IncusFile(object):
         if not local_dest:
              self.module.fail_json(msg="'dest' (local path) is required for state=pulled")
         cmd_args = ['file', 'pull', "{}/{}".format(self.target, remote_src.lstrip('/')), local_dest]
+        if self.recursive:
+             cmd_args.insert(2, '--recursive')
         if self.module.check_mode:
              self.module.exit_json(changed=True, msg="File would be pulled")
         rc, out, err = self.run_incus(cmd_args)
@@ -246,6 +251,7 @@ def main():
             mode=dict(type='str', required=False),
             remote=dict(type='str', default='local', required=False),
             project=dict(type='str', default='default', required=False),
+            recursive=dict(type='bool', default=False, required=False),
         ),
         supports_check_mode=True,
     )

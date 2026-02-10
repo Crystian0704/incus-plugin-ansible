@@ -80,6 +80,7 @@ ansible-galaxy collection install crystian-incus-1.0.0.tar.gz
   crystian.incus.incus_instance:
     name: my-web-server
     remote_image: images:ubuntu/22.04/cloud
+    started: true
     cloud_init_user_data: |
       #cloud-config
       package_upgrade: true

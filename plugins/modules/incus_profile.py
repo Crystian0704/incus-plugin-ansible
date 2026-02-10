@@ -59,7 +59,7 @@ options:
     type: str
     default: default
 author:
-  - Crystian (@crystian)
+  - Crystian @Crystian0704
 '''
 EXAMPLES = r'''
 - name: Create a web server profile
@@ -256,8 +256,6 @@ class IncusProfile(object):
                 elif source_profile and target_profile:
                     pass
                 elif not source_profile and target_profile:
-                    pass
-                else:
                     self.module.fail_json(msg="Source profile '{}' for rename not found".format(self.rename_from))
 
             profile = self.get_profile()

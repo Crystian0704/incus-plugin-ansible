@@ -145,6 +145,12 @@
     content: "dir-content"
     dest: /tmp/test_dir/subdir/file.txt
 
+- name: Create remote directory for push
+  crystian.incus.incus_exec:
+    instance_name: "test-file"
+    remote: "{{ target_remote | default(omit) }}"
+    command: "mkdir -p /root/remote_dir"
+
 - name: Push directory (recursive)
   crystian.incus.incus_file:
     instance_name: "test-file"
@@ -152,6 +158,7 @@
     src: /tmp/test_dir/
     dest: /root/remote_dir/
     state: pushed
+    recursive: true
   register: push_dir
   ignore_errors: true
 

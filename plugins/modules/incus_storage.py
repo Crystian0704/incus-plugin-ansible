@@ -56,7 +56,7 @@ options:
     type: str
     default: default
 author:
-  - Crystian (@crystian)
+  - Crystian @Crystian0704
 '''
 EXAMPLES = r'''
 - name: Create a dir storage pool
