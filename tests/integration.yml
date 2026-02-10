@@ -65,3 +65,7 @@
     - name: Test incus_remote
       import_tasks: integration/targets/incus_remote/tasks/main.yml
       tags: [incus_remote]
+
+    - name: Test incus_network
+      import_tasks: integration/targets/incus_network/tasks/main.yml
+      tags: [incus_network]

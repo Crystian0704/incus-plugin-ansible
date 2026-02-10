@@ -16,7 +16,7 @@
     - name: End play if setup is complete
       meta: end_play
       when:
-        - setup_marker.stat.exists
+        - false # FORCE RUN # - setup_marker.stat.exists
         - not (delete_infra | default(false) | bool)
 
     - name: Cleanup previous infra
@@ -38,7 +38,7 @@
       crystian.incus.incus_instance:
         name: "{{ vm_name }}"
         remote_image: "{{ image_name }}"
-        type: virtual-machine
+        vm: true
         config:
           limits.cpu: "2"
           limits.memory: "2GiB"
@@ -130,6 +130,30 @@
         state: present
         remote: "{{ remote_name }}"
       delegate_to: localhost
+
+    - name: Install OVN dependencies
+      crystian.incus.incus_exec:
+        instance_name: "{{ vm_name }}"
+        command: "sh -c 'apt-get update && apt-get install -y ovn-host ovn-central openvswitch-switch'"
+      register: ovn_install
+      retries: 3
+      delay: 5
+      until: ovn_install.rc == 0
+
+    - name: Configure OVS for OVN
+      crystian.incus.incus_exec:
+        instance_name: "{{ vm_name }}"
+        command: "ovs-vsctl set open_vswitch . external_ids:ovn-remote=unix:/run/ovn/ovnsb_db.sock external_ids:ovn-encap-type=geneve external_ids:ovn-encap-ip=127.0.0.1"
+
+    - name: Enable OVN services
+      crystian.incus.incus_exec:
+        instance_name: "{{ vm_name }}"
+        command: "systemctl enable --now ovn-central ovn-host"
+
+    - name: Configure Incus OVN connection (optional but good practice)
+      crystian.incus.incus_exec:
+        instance_name: "{{ vm_name }}"
+        command: "incus config set network.ovn.northbound_connection unix:/run/ovn/ovnnb_db.sock"
 
     - name: Create default profile root disk (nested)
       crystian.incus.incus_profile:
