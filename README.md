@@ -206,10 +206,6 @@ ansible-galaxy collection install crystian-incus-1.0.0.tar.gz
     msg: "{{ lookup('crystian.incus.incus_list', filters=['status=RUNNING', 'type=container']) }}"
 ```
 
-```
-
-
-
 ## Running Tests
 
 Integration tests are included to validate the functionality of the collection.
