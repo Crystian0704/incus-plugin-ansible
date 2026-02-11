@@ -48,6 +48,21 @@ ansible-galaxy collection install crystian-incus-1.0.0.tar.gz
 | `incus_exec` | Execute commands in instances. |
 | `incus_file` | Manage files in instances. |
 | `incus_snapshot` | Manage instance snapshots. |
+| `incus_network` | Manage Incus networks. |
+| `incus_network_acl` | Manage Incus network ACLs. |
+| `incus_network_zone` | Manage Incus network zones. |
+| `incus_network_forward` | Manage Incus network forwards. |
+| `incus_info` | Get information about Incus resources. |
+| `incus_admin_init` | Initialize Incus server. |
+
+## Lookup Plugins
+
+| Lookup | Description |
+|---|---|
+| `incus_config` | Get configuration of an instance. |
+| `incus_list` | List instances with filters. |
+| `incus_info` | Get detailed info/state of an instance or server. |
+| `incus_query` | Perform raw API queries. |
 
 ## Usage Examples
 
@@ -128,6 +143,69 @@ ansible-galaxy collection install crystian-incus-1.0.0.tar.gz
     snapshot_name: backup-snap
     state: present
 
+### Network Management
+```yaml
+- name: Create a network
+  crystian.incus.incus_network:
+    name: my-network
+    type: bridge
+    config:
+      ipv4.address: 10.0.1.1/24
+      ipv4.nat: true
+```
+
+### Initialize Server (Preseed)
+```yaml
+- name: Init Incus
+  crystian.incus.incus_admin_init:
+    config:
+      networks:
+        - name: incusbr0
+          type: bridge
+          config:
+            ipv4.address: auto
+            ipv6.address: auto
+      storage_pools:
+        - name: default
+          driver: dir
+      profiles:
+        - name: default
+          devices:
+            root:
+              path: /
+              pool: default
+              type: disk
+            eth0:
+              name: eth0
+              network: incusbr0
+              type: nic
+```
+
+### Trust Management
+```yaml
+- name: Add client trust
+  crystian.incus.incus_config:
+    trust:
+      name: my-ansible-client
+    state: present
+  register: trust_result
+
+- name: Show token
+  debug:
+    msg: "Certificate added. Token: {{ trust_result.token }}"
+```
+
+### Lookup Plugin Usage
+```yaml
+- name: Get instance config
+  debug:
+    msg: "{{ lookup('crystian.incus.incus_config', 'my-container') }}"
+
+- name: List running containers
+  debug:
+    msg: "{{ lookup('crystian.incus.incus_list', filters=['status=RUNNING', 'type=container']) }}"
+```
+
 ```
 
 
@@ -159,7 +237,7 @@ ansible-playbook tests/integration.yml -e delete_infra=true
 
 ## Known Limitations
 
-- **Missing Modules**: `incus_network` for `incus network` and `incus_cluster` for `incus cluster` are not yet implemented.
+- **Missing Modules**: `incus_cluster` for `incus cluster` is not yet implemented.
 - **Storage Backends**: Support for some specific storage backends is incomplete.
 - **Testing**: More complex integration tests and edge cases need to be covered.
 

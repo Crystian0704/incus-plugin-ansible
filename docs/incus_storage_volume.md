@@ -1,4 +1,4 @@
-# incus_storage_volume
+# incus_storage_volume (Module)
 
 Manage Incus custom storage volumes
 

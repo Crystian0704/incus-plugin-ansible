@@ -1,4 +1,4 @@
-# incus_project
+# incus_project (Module)
 
 Manage Incus projects
 

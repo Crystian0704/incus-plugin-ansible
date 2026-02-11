@@ -1,0 +1,23 @@
+---
+- name: Get info for test-infra-vm (module)
+  crystian.incus.incus_info:
+    name: test-infra-vm
+  register: info_module_result
+
+- name: Verify module result
+  assert:
+    that:
+      - info_module_result.info.name == 'test-infra-vm'
+      - info_module_result.info.state_info.status == 'Running'
+      - info_module_result.info.expanded_devices.eth0.network == 'incusbr0'
+
+- name: Get info for test-infra-vm (module) with remote
+  crystian.incus.incus_info:
+    name: test-infra-vm
+    remote: local
+  register: info_module_remote_result
+
+- name: Verify module remote result
+  assert:
+    that:
+      - info_module_remote_result.info.name == 'test-infra-vm'

@@ -124,16 +124,13 @@ class IncusNetworkZone(object):
     def create_or_update(self):
         current = self.get_zone()
         
-        # Prepare desired state
         desired = {
             'name': self.name,
             'description': self.description if self.description is not None else (current.get('description', '') if current else ''),
             'config': self.config if self.config is not None else (current.get('config', {}) if current else {})
         }
 
-        # If we have current state, merge/check differences
         if current:
-            # Check if update is needed
             changes_needed = False
             
             if self.description is not None and current.get('description') != self.description:
@@ -148,7 +145,6 @@ class IncusNetworkZone(object):
             if self.module.check_mode:
                 self.module.exit_json(changed=True, msg="Network zone would be updated")
 
-            # Update via edit
             rc, out, err = self.run_incus(['network', 'zone', 'edit', self.get_target_name()], stdin=yaml.dump(desired))
             if rc != 0:
                 self.module.fail_json(msg="Failed to update network zone: " + err, stdout=out, stderr=err)
@@ -156,7 +152,6 @@ class IncusNetworkZone(object):
             self.module.exit_json(changed=True, msg="Network zone updated")
 
         else:
-            # Create
             if self.module.check_mode:
                 self.module.exit_json(changed=True, msg="Network zone would be created")
             
@@ -165,10 +160,8 @@ class IncusNetworkZone(object):
             if rc != 0:
                 self.module.fail_json(msg="Failed to create network zone: " + err, stdout=out, stderr=err)
             
-            # Apply configuration immediately after creation if needed
             rc, out, err = self.run_incus(['network', 'zone', 'edit', self.get_target_name()], stdin=yaml.dump(desired))
             if rc != 0:
-                 # Try to cleanup
                  self.run_incus(['network', 'zone', 'delete', self.get_target_name()], check_rc=False)
                  self.module.fail_json(msg="Failed to configure created network zone: " + err, stdout=out, stderr=err)
 
@@ -176,7 +169,7 @@ class IncusNetworkZone(object):
 
     def delete(self):
         if self.module.check_mode:
-             self.get_zone() # Check existence
+             self.get_zone() 
              if self.get_zone():
                 self.module.exit_json(changed=True, msg="Network zone would be deleted")
              else:

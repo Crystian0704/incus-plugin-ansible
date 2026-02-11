@@ -1,5 +1,6 @@
 ---
-- hosts: localhost
+- name: Provision Test Infrastructure
+  hosts: localhost
   connection: local
   gather_facts: false
   vars:
@@ -16,7 +17,7 @@
     - name: End play if setup is complete
       meta: end_play
       when:
-        - false # FORCE RUN # - setup_marker.stat.exists
+        - false # FORCE RUN
         - not (delete_infra | default(false) | bool)
 
     - name: Cleanup previous infra
@@ -50,76 +51,126 @@
       wait_for:
         timeout: 60
 
-    - name: Install dependencies (curl, gpg)
-      crystian.incus.incus_exec:
-        instance_name: "{{ vm_name }}"
-        command: "sh -c 'apt-get update && apt-get install -y ca-certificates curl gnupg lvm2 btrfs-progs'"
-      register: dep_install
-      retries: 3
-      delay: 5
-      until: dep_install.rc == 0
+    - name: Add host to inventory
+      add_host:
+        name: "{{ vm_name }}"
+        groups: build_group
+        ansible_connection: community.general.incus
+        ansible_incus_remote: local
+        ansible_user: root
+
+- name: Configure Test Infrastructure
+  hosts: build_group
+  gather_facts: false
+  tasks:
+    - name: Install Python (raw)
+      raw: apt-get update && apt-get install -y python3
+      changed_when: false
+
+    - name: Gather Facts
+      setup:
+
+    - name: Install dependencies
+      apt:
+        name:
+          - ca-certificates
+          - curl
+          - gnupg
+          - lvm2
+          - btrfs-progs
+          - python3-yaml
+        state: present
+        update_cache: yes
 
     - name: Setup Zabbly Key
-      crystian.incus.incus_exec:
-        instance_name: "{{ vm_name }}"
-        command: "sh -c 'mkdir -p /etc/apt/keyrings; curl -fsSL https://pkgs.zabbly.com/key.asc -o /etc/apt/keyrings/zabbly.asc'"
+      shell: "mkdir -p /etc/apt/keyrings; curl -fsSL https://pkgs.zabbly.com/key.asc -o /etc/apt/keyrings/zabbly.asc"
+      args:
+        creates: /etc/apt/keyrings/zabbly.asc
 
     - name: Setup Zabbly Repo
-      crystian.incus.incus_exec:
-        instance_name: "{{ vm_name }}"
-        command: "sh -c 'echo \"deb [signed-by=/etc/apt/keyrings/zabbly.asc] https://pkgs.zabbly.com/incus/daily $(. /etc/os-release && echo ${VERSION_CODENAME}) main\" > /etc/apt/sources.list.d/zabbly-incus-daily.list'"
+      shell: "echo \"deb [signed-by=/etc/apt/keyrings/zabbly.asc] https://pkgs.zabbly.com/incus/daily $(. /etc/os-release && echo ${VERSION_CODENAME}) main\" > /etc/apt/sources.list.d/zabbly-incus-daily.list"
 
     - name: Install Incus
-      crystian.incus.incus_exec:
-        instance_name: "{{ vm_name }}"
-        command: "sh -c 'apt-get update && apt-get install -y incus'"
-      register: incus_install
+      apt:
+        name: incus
+        state: present
+        update_cache: yes
 
-    - name: Check Incus Init
-      crystian.incus.incus_exec:
-        instance_name: "{{ vm_name }}"
-        command: "incus info"
-      register: incus_info
-      ignore_errors: true
+    - name: Start Incus Service (if not running)
+      service:
+        name: incus
+        state: started
+        enabled: yes
 
     - name: Initialize Incus
-      crystian.incus.incus_exec:
-        instance_name: "{{ vm_name }}"
-        command: "incus admin init --minimal"
-      when: incus_info.rc != 0
-    
-    - name: Config bind address
-      crystian.incus.incus_exec:
-        instance_name: "{{ vm_name }}"
-        command: "incus config set core.https_address :8443"
+      crystian.incus.incus_admin_init:
+        minimal: true
 
+    - name: Config bind address
+      crystian.incus.incus_config:
+        config:
+          core.https_address: ":8443"
+    
     - name: Config trust token
-      crystian.incus.incus_exec:
-        instance_name: "{{ vm_name }}"
-        command: "incus config trust add ansible-client --quiet"
+      crystian.incus.incus_config:
+        trust:
+          name: ansible-client
       register: trust_token_out
 
-    - name: Get VM IP
-      crystian.incus.incus_list:
-        filters:
-          - "{{ vm_name }}"
-      register: vm_info
+    - name: Install OVN dependencies
+      apt:
+        name:
+          - ovn-host
+          - ovn-central
+          - openvswitch-switch
+        state: present
 
-    - name: Parse IP
+    - name: Configure OVS for OVN
+      command: "ovs-vsctl set open_vswitch . external_ids:ovn-remote=unix:/run/ovn/ovnsb_db.sock external_ids:ovn-encap-type=geneve external_ids:ovn-encap-ip=127.0.0.1"
+
+    - name: Enable OVN services
+      service:
+        name: "{{ item }}"
+        state: started
+        enabled: yes
+      loop:
+        - ovn-central
+        - ovn-host
+
+    - name: Configure Incus OVN connection
+      crystian.incus.incus_config:
+        config:
+          network.ovn.northbound_connection: "unix:/run/ovn/ovnnb_db.sock"
+
+- name: Finalize Setup (Localhost)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    vm_name: "test-infra-vm"
+    remote_name: "test-infra"
+  tasks:
+    - name: Get VM IP
       set_fact:
-         vm_ip: "{{ (vm_info.list | first).state.network | dict2items | map(attribute='value.addresses') | flatten | selectattr('family', 'equalto', 'inet') | map(attribute='address') | first }}"
+         vm_ip: "{{ query('crystian.incus.incus_list', vm_name) | map(attribute='state.network') | list | first | dict2items | map(attribute='value.addresses') | flatten | selectattr('family', 'equalto', 'inet') | map(attribute='address') | first }}"
+
+    - name: Set Token Fact
+      set_fact:
+        trust_token: "{{ hostvars[vm_name]['trust_token_out']['token'] | default(hostvars[vm_name]['trust_token_out'].get('stdout', '') | trim) }}"
 
     - name: Add Remote
       crystian.incus.incus_remote:
         name: "{{ remote_name }}"
         url: "https://{{ vm_ip }}:8443"
-        token: "{{ trust_token_out.stdout | trim }}"
+        token: "{{ trust_token }}"
         accept_certificate: true
 
     - name: Create incusbr0 network (nested)
-      command: "incus network create {{ remote_name }}:incusbr0"
-      delegate_to: localhost
-      ignore_errors: true
+      crystian.incus.incus_network:
+         name: incusbr0
+         type: bridge
+         remote: "{{ remote_name }}"
+         state: present
 
     - name: Create default storage pool (nested)
       crystian.incus.incus_storage:
@@ -130,30 +181,6 @@
         state: present
         remote: "{{ remote_name }}"
       delegate_to: localhost
-
-    - name: Install OVN dependencies
-      crystian.incus.incus_exec:
-        instance_name: "{{ vm_name }}"
-        command: "sh -c 'apt-get update && apt-get install -y ovn-host ovn-central openvswitch-switch'"
-      register: ovn_install
-      retries: 3
-      delay: 5
-      until: ovn_install.rc == 0
-
-    - name: Configure OVS for OVN
-      crystian.incus.incus_exec:
-        instance_name: "{{ vm_name }}"
-        command: "ovs-vsctl set open_vswitch . external_ids:ovn-remote=unix:/run/ovn/ovnsb_db.sock external_ids:ovn-encap-type=geneve external_ids:ovn-encap-ip=127.0.0.1"
-
-    - name: Enable OVN services
-      crystian.incus.incus_exec:
-        instance_name: "{{ vm_name }}"
-        command: "systemctl enable --now ovn-central ovn-host"
-
-    - name: Configure Incus OVN connection (optional but good practice)
-      crystian.incus.incus_exec:
-        instance_name: "{{ vm_name }}"
-        command: "incus config set network.ovn.northbound_connection unix:/run/ovn/ovnnb_db.sock"
 
     - name: Create default profile root disk (nested)
       crystian.incus.incus_profile:

@@ -76,9 +76,6 @@ class LookupModule(LookupBase):
         filters = self.get_option('filters') or []
         all_projects = self.get_option('all_projects')
 
-        # If terms are provided, treat them as filters (backwards compatibility/convenience)
-        # But standard way is kwargs usually for complex lookups.
-        # Let's append terms to filters if compatible.
         for term in terms:
             if isinstance(term, str):
                 filters.append(term)
@@ -86,20 +83,11 @@ class LookupModule(LookupBase):
         cmd = ['incus', 'list', '--format=json']
 
         target = remote + ":" if remote and remote != 'local' else ''
-        
-        # filters are positional arguments in incus list
-        # incus list [remote:] [filters]
-        
-        # If we have filters, we add them. 
-        # Note: if remote is specified, it is usually part of the first argument if it isn't a filter.
-        # incus list myremote: type=container
-        
+                
         cmd_args = []
         if target:
-             # We need to be careful. If target is just "remote:", incus list expects it.
              cmd_args.append(target)
         
-        # Append filters
         cmd_args.extend(filters)
         
         cmd.extend(cmd_args)

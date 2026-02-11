@@ -116,8 +116,6 @@
     command: "rm -rf /tmp/incus_test_vol"
   when: target_remote is defined
 
-
-
 - name: Create container for multiple config test
   crystian.incus.incus_instance:
     name: "test-config-multi"
@@ -140,15 +138,15 @@
     that:
       - result_multi.changed == true
 
-- name: Verify multiple keys (command)
-  command: "incus config show {{ (target_remote ~ ':') if target_remote is defined else '' }}test-config-multi"
-  register: result_show_multi
+- name: Verify multiple keys (lookup)
+  set_fact:
+    multi_config: "{{ query('crystian.incus.incus_config', 'test-config-multi', remote=(target_remote | default('local'))) | first }}"
 
 - name: Assert multiple keys verification
   assert:
     that:
-      - "'limits.cpu: \"1\"' in result_show_multi.stdout"
-      - "'limits.memory: 128MiB' in result_show_multi.stdout"
+      - multi_config.config['limits.cpu'] == '1'
+      - multi_config.config['limits.memory'] == '128MiB'
 
 - name: Update one key, keep other (mixed state idempotency)
   crystian.incus.incus_config:
@@ -164,15 +162,15 @@
     that:
       - result_mixed.changed == true
 
-- name: Verify mixed update
-  command: "incus config show {{ (target_remote ~ ':') if target_remote is defined else '' }}test-config-multi"
-  register: result_show_mixed
+- name: Verify mixed update (lookup)
+  set_fact:
+    mixed_config: "{{ query('crystian.incus.incus_config', 'test-config-multi', remote=(target_remote | default('local'))) | first }}"
 
 - name: Assert mixed verification
   assert:
     that:
-      - "'limits.cpu: \"2\"' in result_show_mixed.stdout"
-      - "'limits.memory: 128MiB' in result_show_mixed.stdout"
+      - mixed_config.config['limits.cpu'] == '2'
+      - mixed_config.config['limits.memory'] == '128MiB'
 
 - name: Cleanup multiple config test
   crystian.incus.incus_instance:

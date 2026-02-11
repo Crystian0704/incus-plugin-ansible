@@ -60,10 +60,15 @@
       ipv4.address: "10.99.99.1/24"
   register: bridge_ovn_config
 
+- name: Get server info
+  crystian.incus.incus_info:
+    remote: test-infra
+  register: server_info
+
 - name: Check for OVN support
-  command: "incus info test-infra:"
-  register: incus_info
-  changed_when: false
+  set_fact:
+    ovn_supported: "{{ 'network_state_ovn' in server_info.info.api_extensions }}"
+    forward_supported: "{{ 'network_forward' in server_info.info.api_extensions }}"
 
 - name: Setup ACL
   crystian.incus.incus_network_acl:
@@ -76,7 +81,7 @@
     egress:
       - action: allow
         state: enabled
-  when: "'network_state_ovn' in incus_info.stdout"
+  when: ovn_supported
 
 - name: Setup Zone
   crystian.incus.incus_network_zone:
@@ -84,7 +89,7 @@
     state: present
     remote: test-infra
     description: "Test Zone"
-  when: "'network_state_ovn' in incus_info.stdout"
+  when: ovn_supported
 
 - name: Create OVN network with ACL and Zone
   crystian.incus.incus_network:
@@ -96,14 +101,14 @@
       network: incusbr-test
       security.acls: acl-test
       dns.zone.forward: incus.test
-  when: "'network_state_ovn' in incus_info.stdout"
+  when: ovn_supported
   register: ovn_create
 
 - name: Verify OVN create
   assert:
     that:
       - ovn_create.changed == true
-  when: "'network_state_ovn' in incus_info.stdout"
+  when: ovn_supported
 
 - name: Verify OVN idempotency
   crystian.incus.incus_network:
@@ -115,14 +120,14 @@
       network: incusbr-test
       security.acls: acl-test
       dns.zone.forward: incus.test
-  when: "'network_state_ovn' in incus_info.stdout"
+  when: ovn_supported
   register: ovn_idempotency
 
 - name: Assert OVN idempotency
   assert:
     that:
       - ovn_idempotency.changed == false
-  when: "'network_state_ovn' in incus_info.stdout"
+  when: ovn_supported
 
 - name: Unset ACL from OVN network
   crystian.incus.incus_network:
@@ -130,14 +135,14 @@
     remote: test-infra
     config:
       security.acls: null
-  when: "'network_state_ovn' in incus_info.stdout"
+  when: ovn_supported
   register: ovn_unset_acl
 
 - name: Verify ACL unset (changed)
   assert:
     that:
       - ovn_unset_acl.changed == true
-  when: "'network_state_ovn' in incus_info.stdout"
+  when: ovn_supported
 
 - name: Verify ACL unset idempotency
   crystian.incus.incus_network:
@@ -145,22 +150,18 @@
     remote: test-infra
     config:
       security.acls: null
-  when: "'network_state_ovn' in incus_info.stdout"
+  when: ovn_supported
   register: ovn_unset_idempotency
 
 - name: Assert ACL unset idempotency
   assert:
     that:
       - ovn_unset_idempotency.changed == false
-  when: "'network_state_ovn' in incus_info.stdout"
+  when: ovn_supported
 
 - name: Verify Config Unset logic (Bridge)
   block:
-    - name: Check for Forward support
-      command: "incus network forward list test-infra:incusbr-test"
-      register: forward_support
-      ignore_errors: true
-      changed_when: false
+
 
     - name: Setup Network Forward
       crystian.incus.incus_network_forward:
@@ -173,16 +174,16 @@
             target_address: "10.99.99.10"
             target_port: "80"
         remote: test-infra
-      when: forward_support.rc == 0
+      when: forward_supported
       register: forward_create
 
     - name: Verify Forward create
       assert:
         that:
           - forward_create.changed == true
-      when: forward_support.rc == 0
+      when: forward_supported
 
-- name: Verify Forward idempotency
+    - name: Verify Forward idempotency
       crystian.incus.incus_network_forward:
         network: incusbr-test
         listen_address: "10.99.99.1"
@@ -193,14 +194,14 @@
             target_address: "10.99.99.10"
             target_port: "80"
         remote: test-infra
-      when: forward_support.rc == 0
+      when: forward_supported
       register: forward_idempotency
 
     - name: Assert Forward idempotency
       assert:
         that:
           - forward_idempotency.changed == false
-      when: forward_support.rc == 0
+      when: forward_supported
 
     - name: Update Network Forward (add port)
       crystian.incus.incus_network_forward:
@@ -217,14 +218,14 @@
             target_address: "10.99.99.10"
             target_port: "443"
         remote: test-infra
-      when: forward_support.rc == 0
+      when: forward_supported
       register: forward_update
 
     - name: Verify Forward update
       assert:
         that:
           - forward_update.changed == true
-      when: forward_support.rc == 0
+      when: forward_supported
 
     - name: Cleanup Network Forward
       crystian.incus.incus_network_forward:
@@ -232,14 +233,14 @@
         listen_address: "10.99.99.1"
         state: absent
         remote: test-infra
-      when: forward_support.rc == 0
+      when: forward_supported
       register: forward_delete
 
     - name: Verify Forward delete
       assert:
         that:
           - forward_delete.changed == true
-      when: forward_support.rc == 0
+      when: forward_supported
 
     - name: Set DHCP config
       crystian.incus.incus_network:
@@ -280,7 +281,6 @@
         that:
           - bridge_unset_dhcp_idem.changed == false
 
-
 - name: Cleanup OVN network
   crystian.incus.incus_network:
     name: ovn-test
@@ -293,7 +293,7 @@
     name: acl-test
     state: absent
     remote: test-infra
-  when: "'network_state_ovn' in incus_info.stdout"
+  when: ovn_supported
   ignore_errors: true
 
 - name: Cleanup Zones
@@ -301,7 +301,7 @@
     name: incus.test
     state: absent
     remote: test-infra
-  when: "'network_state_ovn' in incus_info.stdout"
+  when: ovn_supported
   ignore_errors: true
 
 - name: Cleanup bridge network

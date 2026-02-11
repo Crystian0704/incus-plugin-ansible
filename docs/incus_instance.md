@@ -1,4 +1,4 @@
-# incus_instance
+# incus_instance (Module)
 
 Manage Incus instances (create and start)
 

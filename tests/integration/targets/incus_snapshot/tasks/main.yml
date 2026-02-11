@@ -55,11 +55,13 @@
       - snap_reuse.changed == true
 
 - name: List snapshots (DEBUG)
-  command: incus info {{ target_remote | default('local') }}:test-snap
+  crystian.incus.incus_info:
+    name: test-snap
+    remote: "{{ target_remote | default(omit) }}"
   register: debug_info
 
 - debug:
-    var: debug_info.stdout
+    var: debug_info.info.snapshots
 
 - name: Rename snapshot
   crystian.incus.incus_snapshot:

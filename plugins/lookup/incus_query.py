@@ -5,13 +5,13 @@ from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
 DOCUMENTATION = r"""
-  name: incus_config
+  name: incus_query
   author: Crystian @Crystian0704
   version_added: "1.0.0"
-  short_description: Get Incus instance configuration
+  short_description: Query Incus API
   description:
-      - This lookup returns the configuration of an Incus instance.
-      - It wraps 'incus query /1.0/instances/<instance>'.
+      - This lookup performs a raw query against the Incus API.
+      - Useful for retrieving information not covered by specific lookups.
   options:
     remote:
       description:
@@ -30,14 +30,14 @@ DOCUMENTATION = r"""
 """
 
 EXAMPLES = r"""
-- name: Get config for an instance
+- name: Get project info
   debug:
-    msg: "{{ lookup('crystian.incus.incus_config', 'my-container') }}"
+    msg: "{{ lookup('crystian.incus.incus_query', '/1.0/projects/default') }}"
 """
 
 RETURN = r"""
   _raw:
-    description: Instance configuration dictionary
+    description: API response (parsed JSON)
     type: dict
 """
 
@@ -61,12 +61,14 @@ class LookupModule(LookupBase):
         ret = []
         
         for term in terms:
-            instance_name = term
+            api_path = term
             
-            api_path = "/1.0/instances/%s" % instance_name
-            
-            if project:
-                api_path += "?project=%s" % project
+            if '?' in api_path:
+                if project:
+                     api_path += "&project=%s" % project
+            else:
+                if project:
+                     api_path += "?project=%s" % project
             
             cmd = ['incus', 'query', api_path]
                 
@@ -77,16 +79,27 @@ class LookupModule(LookupBase):
             env['LC_ALL'] = 'C'
             
             try:
-                display.vvvv(u"Incus config lookup running: %s" % " ".join(cmd))
+                display.vvvv(u"Incus query lookup running: %s" % " ".join(cmd))
                 p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
                 stdout, stderr = p.communicate()
                 
                 if p.returncode != 0:
-                    raise AnsibleError("Error fetching incus config for %s: %s" % (instance_name, stderr.decode('utf-8')))
+                     try:
+                         ret.append(json.loads(stdout.decode('utf-8')))
+                         continue
+                     except:
+                        raise AnsibleError("Error querying incus API %s: %s" % (api_path, stderr.decode('utf-8')))
                 
-                ret.append(json.loads(stdout.decode('utf-8')))
+                if not stdout:
+                     ret.append(None)
+                     continue
+
+                try:
+                    ret.append(json.loads(stdout.decode('utf-8')))
+                except ValueError:
+                    ret.append(stdout.decode('utf-8'))
                 
             except Exception as e:
-                raise AnsibleError("Failed to lookup incus config: %s" % str(e))
+                raise AnsibleError("Failed to query incus API: %s" % str(e))
                 
         return ret

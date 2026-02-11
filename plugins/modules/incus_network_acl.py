@@ -146,7 +146,6 @@ class IncusNetworkACL(object):
     def create_or_update(self):
         current = self.get_acl()
         
-        # Prepare desired state
         desired = {
             'name': self.name,
             'description': self.description if self.description is not None else (current.get('description', '') if current else ''),
@@ -155,10 +154,7 @@ class IncusNetworkACL(object):
             'config': self.config if self.config is not None else (current.get('config', {}) if current else {})
         }
 
-        # If we have current state, merge/check differences
         if current:
-            # Check if update is needed
-            # We compare relevant fields
             changes_needed = False
             
             if self.description is not None and current.get('description') != self.description:
@@ -171,14 +167,6 @@ class IncusNetworkACL(object):
                 changes_needed = True
 
             if self.config is not None:
-                # For config, we need to compare keys provided in self.config
-                # But since we use edit, we essentially replace the config if we pass the whole dict?
-                # 'incus network acl edit' expects the full object.
-                # However, usually users expect partial updates for config validation in other modules?
-                # But here 'edit' is atomic. Let's assume we replace the config if provided, 
-                # OR we act like other modules and merge.
-                # Given ACLs are complex, fully defining the state is usually safer.
-                # But let's check equality.
                 if current.get('config') != self.config:
                     changes_needed = True
 
@@ -188,7 +176,6 @@ class IncusNetworkACL(object):
             if self.module.check_mode:
                 self.module.exit_json(changed=True, msg="ACL would be updated")
 
-            # Update via edit
             rc, out, err = self.run_incus(['network', 'acl', 'edit', self.get_target_name()], stdin=yaml.dump(desired))
             if rc != 0:
                 self.module.fail_json(msg="Failed to update ACL: " + err, stdout=out, stderr=err)
@@ -196,32 +183,16 @@ class IncusNetworkACL(object):
             self.module.exit_json(changed=True, msg="ACL updated")
 
         else:
-            # Create
             if self.module.check_mode:
                 self.module.exit_json(changed=True, msg="ACL would be created")
-            
-            # Create command doesn't take many args, usually just name.
-            # Then we can edit, OR we can create with cat.
-            # 'incus network acl create <name>'
             
             cmd = ['network', 'acl', 'create', self.get_target_name()]
             rc, out, err = self.run_incus(cmd)
             if rc != 0:
                 self.module.fail_json(msg="Failed to create ACL: " + err, stdout=out, stderr=err)
             
-            # Apply configuration immediately after creation if needed
-            # If default creation is empty, we need to apply our desired state
-            # which might include rules etc.
-            
-            # The 'desired' dict built above is correct for the 'edit' input.
-            # So we apply it now.
-            
-            # We need to verify if the create command already sets a basic structure or if we need to fetch it first?
-            # Usually create makes an empty one.
-            
             rc, out, err = self.run_incus(['network', 'acl', 'edit', self.get_target_name()], stdin=yaml.dump(desired))
             if rc != 0:
-                 # Try to cleanup
                  self.run_incus(['network', 'acl', 'delete', self.get_target_name()], check_rc=False)
                  self.module.fail_json(msg="Failed to configure created ACL: " + err, stdout=out, stderr=err)
 
@@ -229,7 +200,7 @@ class IncusNetworkACL(object):
 
     def delete(self):
         if self.module.check_mode:
-             self.get_acl() # Check existence
+             self.get_acl() 
              if self.get_acl():
                 self.module.exit_json(changed=True, msg="ACL would be deleted")
              else:

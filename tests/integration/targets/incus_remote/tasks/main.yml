@@ -9,7 +9,9 @@
     infra_ip: "{{ (infra_info.list | first).state.network | dict2items | map(attribute='value.addresses') | flatten | selectattr('family', 'equalto', 'inet') | map(attribute='address') | first }}"
 
 - name: Generate Trust Token on test-infra-vm
-  command: incus exec test-infra-vm -- incus config trust add test-client-remote --quiet
+  crystian.incus.incus_exec:
+    instance_name: test-infra-vm
+    command: incus config trust add test-client-remote --quiet
   register: infra_token
 
 - name: Set Token

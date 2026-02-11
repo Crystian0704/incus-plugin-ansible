@@ -1,4 +1,4 @@
-# incus_profile
+# incus_profile (Module)
 
 Manage Incus profiles
 

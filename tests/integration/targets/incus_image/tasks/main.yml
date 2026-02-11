@@ -78,11 +78,6 @@
     that:
       - img_alias_del.changed == true
 
-
-
-
-
-
 - name: Import image from file
   crystian.incus.incus_image:
     alias: "test-alpine-imported"

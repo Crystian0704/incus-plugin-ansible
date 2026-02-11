@@ -78,14 +78,14 @@
     that:
       - profile_update.changed == true
 
-- name: Verify update
-  command: incus profile show {{ target_remote | default('local') }}:test-profile
-  register: profile_show
+- name: Verify update (lookup)
+  set_fact:
+    profile_config: "{{ query('crystian.incus.incus_query', '/1.0/profiles/test-profile', remote=(target_remote | default('local'))) | first }}"
 
 - name: Assert verify
   assert:
     that:
-      - "'limits.cpu: \"2\"' in profile_show.stdout"
+      - profile_config.config['limits.cpu'] == '2'
 
 - name: Create profile source file
   copy:
@@ -116,15 +116,15 @@
     that:
       - profile_source_create.changed == true
 
-- name: Verify source create
-  command: incus profile show {{ target_remote | default('local') }}:test-profile-source
-  register: profile_source_show
+- name: Verify source create (lookup)
+  set_fact:
+    profile_source_config: "{{ query('crystian.incus.incus_query', '/1.0/profiles/test-profile-source', remote=(target_remote | default('local'))) | first }}"
 
 - name: Assert source verify
   assert:
     that:
-      - "'limits.memory: 1GiB' in profile_source_show.stdout"
-      - "'Profile from source' in profile_source_show.stdout"
+      - profile_source_config.config['limits.memory'] == '1GiB'
+      - profile_source_config.description == 'Profile from source'
 
 - name: Update profile with source + override
   crystian.incus.incus_profile:
@@ -135,16 +135,14 @@
       limits.memory: "2GiB"
   register: profile_source_override
 
-- name: Verify source override
-  command: incus profile show {{ target_remote | default('local') }}:test-profile-source
-  register: profile_override_show
+- name: Verify source override (lookup)
+  set_fact:
+    profile_override_config: "{{ query('crystian.incus.incus_query', '/1.0/profiles/test-profile-source', remote=(target_remote | default('local'))) | first }}"
 
 - name: Assert source override
   assert:
     that:
-      - "'limits.memory: 2GiB' in profile_override_show.stdout"
-
-
+      - profile_override_config.config['limits.memory'] == '2GiB'
 
 - name: Rename profile
   crystian.incus.incus_profile:
@@ -169,14 +167,14 @@
     state: present
   register: inst_profile
 
-- name: Verify instance profile config
-  command: incus config show {{ target_remote | default('local') }}:test-profile-instance --expanded
-  register: inst_config
+- name: Verify instance profile config (lookup)
+  set_fact:
+    inst_profile_config: "{{ query('crystian.incus.incus_config', 'test-profile-instance', remote=(target_remote | default('local'))) | first }}"
 
 - name: Assert profile applied
   assert:
     that:
-      - "'limits.memory: 2GiB' in inst_config.stdout"
+      - inst_profile_config.expanded_config['limits.memory'] == '2GiB'
 
 - name: Cleanup instance
   crystian.incus.incus_instance:

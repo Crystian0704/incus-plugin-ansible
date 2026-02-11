@@ -48,14 +48,14 @@
     that:
       - project_update.changed == true
 
-- name: Verify update
-  command: incus project show {{ target_remote | default('local') }}:test-project
-  register: project_show
+- name: Verify update (lookup)
+  set_fact:
+    project_config: "{{ query('crystian.incus.incus_query', '/1.0/projects/test-project', remote=(target_remote | default('local'))) | first }}"
 
 - name: Assert verify
   assert:
     that:
-      - "'limits.containers: \"10\"' in project_show.stdout"
+      - project_config.config['limits.containers'] == '10'
 
 - name: Create project source file
   copy:
@@ -78,14 +78,14 @@
     that:
       - project_source_create.changed == true
       
-- name: Verify source
-  command: incus project show {{ target_remote | default('local') }}:test-project-source
-  register: project_source_show
+- name: Verify source (lookup)
+  set_fact:
+    project_source_config: "{{ query('crystian.incus.incus_query', '/1.0/projects/test-project-source', remote=(target_remote | default('local'))) | first }}"
 
 - name: Assert source verify
   assert:
     that:
-      - "'limits.containers: \"3\"' in project_source_show.stdout"
+      - project_source_config.config['limits.containers'] == '3'
 
 - name: Update source with override
   crystian.incus.incus_project:

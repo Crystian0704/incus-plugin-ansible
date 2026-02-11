@@ -255,7 +255,9 @@ class IncusStorageVolume(object):
             self.module.fail_json(msg="Failed to create storage volume: " + err, stdout=out, stderr=err)
         if self.attach_to:
             self.attach_volume()
-        self.module.exit_json(changed=True, msg="Storage volume created")
+        
+        final_info = self.get_volume_info()
+        self.module.exit_json(changed=True, msg="Storage volume created", volume=final_info)
     def update(self, current_info):
         changed = False
         msgs = []
@@ -279,10 +281,11 @@ class IncusStorageVolume(object):
                  self.attach_volume()
                  changed = True
                  msgs.append("Attached to instance '{}'".format(self.attach_to))
+        final_info = self.get_volume_info()
         if changed:
-            self.module.exit_json(changed=True, msg=", ".join(msgs))
+            self.module.exit_json(changed=True, msg=", ".join(msgs), volume=final_info)
         else:
-            self.module.exit_json(changed=False, msg="Storage volume matches configuration")
+            self.module.exit_json(changed=False, msg="Storage volume matches configuration", volume=final_info)
     def delete(self):
         target_pool = self.pool
         if self.remote and self.remote != 'local':

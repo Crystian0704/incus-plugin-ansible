@@ -1,4 +1,4 @@
-# incus_publish
+# incus_publish (Module)
 
 Publish Incus images from instances
 

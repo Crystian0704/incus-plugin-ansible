@@ -1,4 +1,4 @@
-# incus_image
+# incus_image (Module)
 
 Manage Incus images
 

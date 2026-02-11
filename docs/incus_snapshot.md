@@ -1,4 +1,4 @@
-# incus_snapshot
+# incus_snapshot (Module)
 
 Manage Incus instance snapshots
 

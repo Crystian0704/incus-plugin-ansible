@@ -1,4 +1,4 @@
-# incus_remote
+# incus_remote (Module)
 
 Manage Incus remotes
 

@@ -158,7 +158,6 @@ class IncusNetworkForward(object):
         return p.returncode, stdout.decode('utf-8'), stderr.decode('utf-8')
 
     def get_forward(self):
-        # incus network forward show <network> <listen_address>
         cmd = ['network', 'forward', 'show', self.get_network_target(), self.listen_address]
         rc, out, err = self.run_incus(cmd, check_rc=False)
         if rc == 0:
@@ -171,7 +170,6 @@ class IncusNetworkForward(object):
     def create_or_update(self):
         current = self.get_forward()
         
-        # Prepare desired state
         desired = {
             'listen_address': self.listen_address,
             'description': self.description if self.description is not None else (current.get('description', '') if current else ''),
@@ -179,16 +177,7 @@ class IncusNetworkForward(object):
             'ports': self.ports if self.ports is not None else (current.get('ports', []) if current else [])
         }
 
-        # Normalize ports struct if coming from ansible module (list of dicts) vs incus (list of dicts)
-        # We need to make sure we compare correctly. 
-        # Incus returns ports as a list of dicts.
-        # Ansible params are also list of dicts.
-        # However, order might differ?
-        # Let's hope basic equality works for now or normalized sort might be needed if flaky.
-
-        # If we have current state, merge/check differences
         if current:
-            # Check if update is needed
             changes_needed = False
             
             if self.description is not None and current.get('description') != self.description:
@@ -198,21 +187,16 @@ class IncusNetworkForward(object):
                 changes_needed = True
 
             if self.ports is not None:
-                # Basic comparison
-                # Sort ports by listen_port to ensure order doesn't matter
                 current_ports = sorted(current.get('ports', []), key=lambda k: k.get('listen_port', ''))
                 desired_ports = sorted(self.ports, key=lambda k: k.get('listen_port', ''))
                 
-                # Normalize values to strings for comparison and handle defaults
                 normalized_current = []
                 for p in current_ports:
                     new_p = {}
-                    # Only keep keys we care about
                     for k in ['protocol', 'listen_port', 'target_address', 'target_port', 'description']:
                         if k in p:
                             new_p[k] = str(p[k])
                     
-                    # Handle defaults in current
                     if 'description' not in new_p:
                         new_p['description'] = ''
                     if 'target_port' not in new_p and 'listen_port' in new_p:
@@ -227,7 +211,6 @@ class IncusNetworkForward(object):
                         if k in p and p[k] is not None:
                             new_p[k] = str(p[k])
                      
-                     # Handle defaults in desired
                      if 'description' not in new_p:
                         new_p['description'] = ''
                      if 'target_port' not in new_p and 'listen_port' in new_p:
@@ -245,7 +228,6 @@ class IncusNetworkForward(object):
             if self.module.check_mode:
                 self.module.exit_json(changed=True, msg="Network forward would be updated")
 
-            # Update via edit
             rc, out, err = self.run_incus(
                 ['network', 'forward', 'edit', self.get_network_target(), self.listen_address], 
                 stdin=yaml.dump(desired)
@@ -256,25 +238,19 @@ class IncusNetworkForward(object):
             self.module.exit_json(changed=True, msg="Network forward updated")
 
         else:
-            # Create
             if self.module.check_mode:
                 self.module.exit_json(changed=True, msg="Network forward would be created")
             
-            # incus network forward create <network> <listen_address>
             cmd = ['network', 'forward', 'create', self.get_network_target(), self.listen_address]
             rc, out, err = self.run_incus(cmd)
             if rc != 0:
                 self.module.fail_json(msg="Failed to create network forward: " + err, stdout=out, stderr=err)
-            
-            # Apply configuration immediately after creation if needed (desc, config, ports)
-            # The create command only takes listen address.
             
             rc, out, err = self.run_incus(
                 ['network', 'forward', 'edit', self.get_network_target(), self.listen_address], 
                 stdin=yaml.dump(desired)
             )
             if rc != 0:
-                 # Try to cleanup
                  self.run_incus(['network', 'forward', 'delete', self.get_network_target(), self.listen_address], check_rc=False)
                  self.module.fail_json(msg="Failed to configure created network forward: " + err, stdout=out, stderr=err)
 

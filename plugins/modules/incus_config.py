@@ -45,6 +45,14 @@ options:
       - If state=absent, removes these devices (values ignored, can be list of names or dict).
     type: raw
     required: false
+  trust:
+    description:
+      - Dictionary for trust management.
+      - Requires 'name'.
+      - If state=present, adds trust and returns 'token'.
+      - If state=absent, removes trust (fingerprint lookup by name).
+    type: dict
+    required: false
 author:
   - Crystian @Crystian0704
 '''
@@ -94,8 +102,9 @@ class IncusConfig(object):
         self.state = module.params['state']
         self.config = module.params['config']
         self.devices = module.params['devices']
+        self.trust = module.params['trust']
         self.name = self.name_param
-        if self.remote:
+        if self.remote and self.name_param:
             self.name = "{}:{}".format(self.remote, self.name_param)
         self.incus_path = module.get_bin_path('incus', required=True)
     def _run_command(self, cmd, check_rc=True):
@@ -107,7 +116,10 @@ class IncusConfig(object):
         except Exception as e:
             self.module.fail_json(msg="Command execution exception: %s" % str(e), cmd=cmd)
     def get_instance_config(self):
-        cmd = [self.incus_path, 'config', 'show', self.name]
+        if self.name:
+            cmd = [self.incus_path, 'config', 'show', self.name]
+        else:
+            cmd = [self.incus_path, 'config', 'show']
         rc, out, err = self._run_command(cmd, check_rc=False)
         if rc != 0:
              self.module.fail_json(msg="Failed to get config", cmd=cmd, rc=rc, stdout=out, stderr=err)
@@ -136,7 +148,10 @@ class IncusConfig(object):
                     if self.module.check_mode:
                         pass
                     else:
-                        cmd = [self.incus_path, 'config', 'set', self.name, key, val_str]
+                        if self.name:
+                            cmd = [self.incus_path, 'config', 'set', self.name, key, val_str]
+                        else:
+                            cmd = [self.incus_path, 'config', 'set', key, val_str]
                         self._run_command(cmd)
                     changed = True
             elif self.state == 'absent':
@@ -144,7 +159,10 @@ class IncusConfig(object):
                     if self.module.check_mode:
                         pass
                     else:
-                        cmd = [self.incus_path, 'config', 'unset', self.name, key]
+                        if self.name:
+                            cmd = [self.incus_path, 'config', 'unset', self.name, key]
+                        else:
+                            cmd = [self.incus_path, 'config', 'unset', key]
                         self._run_command(cmd)
                     changed = True
         return changed
@@ -152,6 +170,9 @@ class IncusConfig(object):
         changed = False
         if not self.devices:
             return changed
+        if not self.name:
+             self.module.fail_json(msg="Managing devices requires an instance name")
+
         if self.state == 'absent' and isinstance(self.devices, list):
              target_devices = {k: {} for k in self.devices}
         elif isinstance(self.devices, dict):
@@ -195,26 +216,93 @@ class IncusConfig(object):
                         self._run_command(cmd)
                     changed = True
         return changed
-    def run(self):
+    def get_trust_list(self):
+        cmd = [self.incus_path, 'config', 'trust', 'list', '--format=json']
+        if self.remote:
+             cmd.append("{}:".format(self.remote))
+        
+        rc, out, err = self._run_command(cmd, check_rc=False)
+        if rc != 0:
+             self.module.fail_json(msg="Failed to get trust list", cmd=cmd, rc=rc, stdout=out, stderr=err)
+        
         try:
-            current_info = self.get_instance_config()
-        except Exception:
-            self.module.fail_json(msg="Could not find instance '{}'".format(self.name))
+            return json.loads(out)
+        except Exception as e:
+            self.module.fail_json(msg="Failed to parse trust list JSON: %s" % str(e))
+
+    def process_trust(self):
+        changed = False
+        token = None
+        if not self.trust:
+            return changed, token
+        
+        trust_name = self.trust.get('name')
+        if not trust_name:
+             self.module.fail_json(msg="Trust config requires 'name'")
+        
+        current_trust = self.get_trust_list()
+        exists = any(t.get('name') == trust_name for t in current_trust)
+        
+        if self.state == 'present':
+            if not exists:
+                if self.module.check_mode:
+                    pass
+                else:
+                    cmd = [self.incus_path, 'config', 'trust', 'add', trust_name, '--quiet']
+                    if self.remote:
+                        cmd.append("{}:".format(self.remote))
+                    
+                    rc, out, err = self._run_command(cmd)
+                    token = out.strip()
+                changed = True
+        elif self.state == 'absent':
+             if exists:
+                fingerprint = next((t.get('fingerprint') for t in current_trust if t.get('name') == trust_name), None)
+                if fingerprint:
+                    if self.module.check_mode:
+                        pass
+                    else:
+                        cmd = [self.incus_path, 'config', 'trust', 'remove', fingerprint]
+                        if self.remote:
+                            cmd.append("{}:".format(self.remote))
+                        self._run_command(cmd)
+                    changed = True
+
+        return changed, token
+
+    def run(self):
+        current_info = {}
+        if self.config or self.devices:
+                current_info = self.get_instance_config()
+            except Exception:
+                 if self.name:
+                    self.module.fail_json(msg="Could not find instance '{}'".format(self.name))
+        
         changed_config = self.process_config(current_info)
         changed_devices = self.process_devices(current_info)
-        changed = changed_config or changed_devices
-        self.module.exit_json(changed=changed)
+        changed_trust, token = self.process_trust()
+        
+        changed = changed_config or changed_devices or changed_trust
+        
+        result = {'changed': changed}
+        if token:
+            result['token'] = token
+            
+        self.module.exit_json(**result)
+
 def main():
     module = AnsibleModule(
         argument_spec=dict(
-            instance_name=dict(type='str', required=True, aliases=['name']),
+            instance_name=dict(type='str', required=False, aliases=['name']),
             remote=dict(type='str', required=False),
             state=dict(type='str', choices=['present', 'absent'], default='present'),
             config=dict(type='raw', required=False),
             devices=dict(type='raw', required=False),
+            trust=dict(type='dict', required=False),
         ),
         supports_check_mode=True,
     )
+
     runner = IncusConfig(module)
     runner.run()
 if __name__ == '__main__':

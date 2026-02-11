@@ -1,4 +1,4 @@
-# incus_storage
+# incus_storage (Module)
 
 Manage Incus storage pools
 

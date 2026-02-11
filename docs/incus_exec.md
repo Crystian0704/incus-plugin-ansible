@@ -1,4 +1,4 @@
-# incus_exec
+# incus_exec (Module)
 
 Execute commands in Incus instances
 

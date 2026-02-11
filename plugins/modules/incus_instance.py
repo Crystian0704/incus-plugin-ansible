@@ -217,8 +217,6 @@ class IncusInstance(object):
         self.incus_path = module.get_bin_path('incus', required=True)
     def _run_command(self, cmd, check_rc=True):
         if self.project and self.project != 'default':
-            # Inject --project flag after the incus binary
-            # Assuming cmd[0] is the binary
             if '--project' not in cmd:
                  cmd.insert(1, self.project)
                  cmd.insert(1, '--project')
@@ -236,7 +234,7 @@ class IncusInstance(object):
              parts = instance_name.split(':', 1)
              prefix = parts[0] + ":"
              instance_name = parts[1]
-        elif not name and self.remote: # Use self.remote only if name is self.name (default)
+        elif not name and self.remote:
              prefix = self.remote + ":"
 
         if name and ":" in name:
@@ -402,7 +400,6 @@ class IncusInstance(object):
 
             current_status = info['status'].lower()
             
-            # Compatibility with 'started' boolean
             if self.started and current_status == 'stopped':
                  if self.module.check_mode:
                      self.module.exit_json(changed=True, msg="Instance would be started")
@@ -432,7 +429,6 @@ def main():
             empty=dict(type='bool', default=False),
             ephemeral=dict(type='bool', default=False),
             vm=dict(type='bool', default=False),
-
             profiles=dict(type='list', elements='str', required=False),
             no_profiles=dict(type='bool', default=False),
             network=dict(type='str', required=False),

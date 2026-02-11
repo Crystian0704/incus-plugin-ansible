@@ -103,21 +103,17 @@
     remote: "{{ target_remote | default(omit) }}"
     config:
        size: "20MiB"
-  register: vol_resize
+  register: vol_show
 
 - name: Assert volume resize
   assert:
     that:
-      - vol_resize.changed == true
-
-- name: Verify volume size
-  command: "incus storage volume show {{ target_remote | default('local') }}:test-pool test-vol"
-  register: vol_show
+      - vol_show.changed == true
 
 - name: Assert volume size config
   assert:
     that:
-      - "'size: 20MiB' in vol_show.stdout"
+      - vol_show.volume.config.size == '20MiB'
 
 - name: Create volume with schedule
   crystian.incus.incus_storage_volume:

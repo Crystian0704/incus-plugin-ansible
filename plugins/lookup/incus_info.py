@@ -53,9 +53,10 @@ display = Display()
 class LookupModule(LookupBase):
 
     def _query(self, remote, project, path):
-        cmd = ['incus', 'query', path]
         if project:
-            cmd.extend(['--project', project])
+             path += "?project=%s" % project
+
+        cmd = ['incus', 'query', path]
         
         if remote and remote != 'local':
              cmd[2] = "%s:%s" % (remote, path)
@@ -83,15 +84,10 @@ class LookupModule(LookupBase):
             instance_name = term
             
             try:
-                # Get Config
                 config = self._query(remote, project, "/1.0/instances/%s" % instance_name)
                 
-                # Get State
                 state = self._query(remote, project, "/1.0/instances/%s/state" % instance_name)
                 
-                # Merge state into config using a specific key, or just merge dicts?
-                # Incus `info` CLI command output usually presents them somewhat combined or just presents state.
-                # Let's add a 'state_info' key to the config dict to keep them distinct but accessible.
                 config['state_info'] = state
                 
                 ret.append(config)

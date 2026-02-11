@@ -38,7 +38,7 @@ options:
     type: str
   config:
     description:
-      - Dictionary of configuration options (e.g., 'ipv4.address': '10.0.0.1/24').
+      - "Dictionary of configuration options (e.g., 'ipv4.address': '10.0.0.1/24')."
     required: false
     type: dict
   project:
@@ -148,7 +148,6 @@ class IncusNetwork(object):
         if self.target:
             cmd.extend(['--target', self.target])
             
-        # Add config arguments for creation if provided
         if self.config:
             for k, v in self.config.items():
                 if v is not None:
@@ -161,7 +160,6 @@ class IncusNetwork(object):
         if rc != 0:
              self.module.fail_json(msg="Failed to create network: " + err, stdout=out, stderr=err)
         
-        # Description cannot be set during create (as per user note), so we update it after
         if self.description:
             self.update_description(force=True)
             
@@ -171,15 +169,11 @@ class IncusNetwork(object):
         if not self.description and not force:
             return False
 
-        # If force is True, we assume we need to set it (e.g. after create)
-        # Otherwise we should have checked equality before calling, but let's be safe
-        
         cmd = ['network', 'set', self.get_target_name(), 'description={}'.format(self.description), '--property']
         if self.target:
             cmd.extend(['--target', self.target])
 
         if self.module.check_mode:
-             # If we are just updating description and check mode is on
              return True
 
         rc, out, err = self.run_incus(cmd, check_rc=False)
@@ -213,7 +207,6 @@ class IncusNetwork(object):
             return
 
         rc, out, err = self.run_incus(cmd, check_rc=False)
-         # Ignore errors on unset if key doesn't exist? incus usually handles it gracefully or errors
         if rc != 0:
              self.module.fail_json(msg="Failed to unset config '{}': {}".format(key, err), stdout=out, stderr=err)
 
@@ -224,7 +217,6 @@ class IncusNetwork(object):
 
         changed = False
         
-        # Check description
         current_desc = current.get('description', '')
         if self.description is not None and current_desc != self.description:
             if self.module.check_mode:
@@ -232,7 +224,6 @@ class IncusNetwork(object):
             self.update_description()
             changed = True
 
-        # Check config
         if self.config:
             current_config = current.get('config', {})
             to_set = {}
@@ -248,7 +239,6 @@ class IncusNetwork(object):
                 if k not in current_config or str(current_config[k]) != str_v:
                     to_set[k] = str_v
 
-            # Apply changes
             for k in to_unset:
                 if self.module.check_mode:
                     self.module.exit_json(changed=True, msg="Config '{}' would be unset".format(k))

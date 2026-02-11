@@ -1,4 +1,4 @@
-# incus_file
+# incus_file (Module)
 
 Manage files in Incus instances
 

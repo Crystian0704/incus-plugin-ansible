@@ -1,0 +1,12 @@
+---
+- name: Initialize Incus (should be already initialized)
+  crystian.incus.incus_admin_init:
+    config:
+      config: {}
+  register: init_result
+
+- name: Verify idempotency check
+  assert:
+    that:
+      - init_result.changed == false
+      - "'already initialized' in init_result.msg"

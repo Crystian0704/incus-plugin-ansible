@@ -69,3 +69,15 @@
     - name: Test incus_network
       import_tasks: integration/targets/incus_network/tasks/main.yml
       tags: [incus_network]
+
+    - name: Test incus_lookup
+      import_tasks: integration/targets/incus_lookup/tasks/main.yml
+      tags: [incus_lookup]
+
+    - name: Test incus_info
+      import_tasks: integration/targets/incus_info/tasks/main.yml
+      tags: [incus_info]
+
+    - name: Test incus_admin_init
+      import_tasks: integration/targets/incus_admin_init/tasks/main.yml
+      tags: [incus_admin_init]

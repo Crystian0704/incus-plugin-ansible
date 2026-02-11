@@ -1,9 +1,9 @@
-# incus_config (Lookup Plugin)
+# incus_query (Lookup Plugin)
 
-Get Incus instance configuration
+Query Incus API
 
-This lookup returns the configuration of an Incus instance.
-It wraps 'incus query /1.0/instances/<instance>'.
+This lookup performs a raw query against the Incus API.
+Useful for retrieving information not covered by specific lookups.
 
 ## Parameters
 
@@ -15,15 +15,15 @@ It wraps 'incus query /1.0/instances/<instance>'.
 ## Examples
 
 ```yaml
-- name: Get config for an instance
+- name: Get project info
   debug:
-    msg: "{{ lookup('crystian.incus.incus_config', 'my-container') }}"
+    msg: "{{ lookup('crystian.incus.incus_query', '/1.0/projects/default') }}"
 ```
 
 ## Return Values
 
 ```yaml
 _raw:
-    description: Instance configuration dictionary
+    description: API response (parsed JSON)
     type: dict
 ```
