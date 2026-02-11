@@ -142,6 +142,7 @@ ansible-galaxy collection install crystian-incus-1.0.0.tar.gz
     instance_name: my-container
     snapshot_name: backup-snap
     state: present
+```
 
 ### Network Management
 ```yaml
