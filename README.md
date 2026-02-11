@@ -25,7 +25,7 @@ ansible-galaxy collection install crystian.incus
 
 ### From Git
 ```bash
-ansible-galaxy collection install git+https://github.com/Crystian0704/incus-plugin.git
+ansible-galaxy collection install git+https://github.com/Crystian0704/incus-plugin-ansible.git
 ```
 
 ### Local Build
