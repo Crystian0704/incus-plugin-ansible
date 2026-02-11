@@ -54,6 +54,10 @@ ansible-galaxy collection install crystian-incus-1.0.0.tar.gz
 | `incus_network_forward` | Manage Incus network forwards. |
 | `incus_info` | Get information about Incus resources. |
 | `incus_admin_init` | Initialize Incus server. |
+| `incus_config` | Manage instance configuration and devices. |
+| `incus_export` | Export instance backups. |
+| `incus_list` | List instances (module version). |
+| `incus_publish` | Publish instances as images. |
 
 ## Lookup Plugins
 
