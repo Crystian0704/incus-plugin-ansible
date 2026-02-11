@@ -1,6 +1,10 @@
 ---
-- name: Cleanup instance test (manual)
-  command: "incus delete --force {{ target_remote | default('local') }}:{{ item }}"
+- name: Cleanup instance test (using module)
+  crystian.incus.incus_instance:
+    name: "{{ item }}"
+    remote: "{{ target_remote | default(omit) }}"
+    state: absent
+    force: true
   loop:
     - test-ansible-init
     - test-ansible-launch
