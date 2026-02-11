@@ -45,6 +45,14 @@ options:
       - If state=absent, removes these devices (values ignored, can be list of names or dict).
     type: raw
     required: false
+  tags:
+    description:
+      - Dictionary of tags.
+      - Maps to 'user.<key>'.
+      - If state=present, sets values.
+      - If state=absent, removes keys.
+    type: dict
+    required: false
   trust:
     description:
       - Dictionary for trust management.
@@ -103,6 +111,18 @@ class IncusConfig(object):
         self.config = module.params['config']
         self.devices = module.params['devices']
         self.trust = module.params['trust']
+        self.tags = module.params['tags']
+        
+        if self.tags:
+            if self.config is None:
+                self.config = {}
+                
+            if isinstance(self.config, list):
+                 for k in self.tags.keys():
+                     self.config.append('user.{}'.format(k))
+            elif isinstance(self.config, dict):
+                 for k, v in self.tags.items():
+                     self.config['user.{}'.format(k)] = v
         self.name = self.name_param
         if self.remote and self.name_param:
             self.name = "{}:{}".format(self.remote, self.name_param)
@@ -273,9 +293,10 @@ class IncusConfig(object):
     def run(self):
         current_info = {}
         if self.config or self.devices:
+            try:
                 current_info = self.get_instance_config()
             except Exception:
-                 if self.name:
+                if self.name:
                     self.module.fail_json(msg="Could not find instance '{}'".format(self.name))
         
         changed_config = self.process_config(current_info)
@@ -299,6 +320,7 @@ def main():
             config=dict(type='raw', required=False),
             devices=dict(type='raw', required=False),
             trust=dict(type='dict', required=False),
+            tags=dict(type='dict', required=False),
         ),
         supports_check_mode=True,
     )

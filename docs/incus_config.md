@@ -1,29 +1,61 @@
-# incus_config (Lookup Plugin)
+# incus_config (Module)
 
-Get Incus instance configuration
+Manage Incus instance configuration and devices
 
-This lookup returns the configuration of an Incus instance.
-It wraps 'incus query /1.0/instances/<instance>'.
+Manage configuration options (e.g. limits.memory) and devices for Incus instances.
+This module complements C(incus_instance) which is primarily for creation/state.
+Useful for modifying running instances or managing complex device setups.
 
 ## Parameters
 
 | Parameter | Required | Default | Choices | Description |
 |---|---|---|---|---|
-| `remote` | False | local |  | The remote Incus server to query. Defaults to 'local'. |
-| `project` | False | default |  | The project to query. Defaults to 'default'. |
+| `instance_name` | True |  |  | Name of the instance. |
+| `remote` | False |  |  | Remote server to target (e.g., 'myremote'). |
+| `state` | False | present | ['present', 'absent'] | ensuring 'present' will update config/devices to match provided values. ensuring 'absent' will remove the specified config keys or devices. |
+| `config` | False |  |  | Dictionary of configuration options. If state=present, sets these values. If state=absent, removes these keys (values are ignored, can be list of keys or dict). |
+| `devices` | False |  |  | Dictionary of devices to manage. Key is the device name. Value is a dictionary containing 'type' (required for adding) and options. If state=absent, removes these devices (values ignored, can be list of names or dict). |
+| `tags` | False |  |  | Dictionary of tags. Maps to 'user.<key>'. If state=present, sets values. If state=absent, removes keys. |
+| `trust` | False |  |  | Dictionary for trust management. Requires 'name'. If state=present, adds trust and returns 'token'. If state=absent, removes trust (fingerprint lookup by name). |
 
 ## Examples
 
 ```yaml
-- name: Get config for an instance
-  debug:
-    msg: "{{ lookup('crystian.incus.incus_config', 'my-container') }}"
+- name: Set memory limit
+  crystian.incus.incus_config:
+    instance_name: my-container
+    config:
+      limits.memory: 2GiB
+- name: Add a network device
+  crystian.incus.incus_config:
+    instance_name: my-container
+    devices:
+      eth1:
+        type: nic
+        nictype: bridged
+        parent: incusbr0
+- name: Update device MTU
+  crystian.incus.incus_config:
+    instance_name: my-container
+    devices:
+      eth1:
+        mtu: 1400
+- name: Remove configuration
+  crystian.incus.incus_config:
+    instance_name: my-container
+    state: absent
+    config:
+      - limits.memory
+- name: Remove device
+  crystian.incus.incus_config:
+    instance_name: my-container
+    state: absent
+    devices:
+      - eth1
 ```
 
 ## Return Values
 
 ```yaml
-_raw:
-    description: Instance configuration dictionary
-    type: dict
+# Default return values
 ```

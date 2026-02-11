@@ -68,6 +68,35 @@ ansible-galaxy collection install crystian-incus-1.0.0.tar.gz
 | `incus_info` | Get detailed info/state of an instance or server. |
 | `incus_query` | Perform raw API queries. |
 
+## Inventory Plugin
+
+The collection includes a dynamic inventory plugin to query Incus instances.
+
+| Plugin | Description |
+|---|---|
+| `incus_inventory` | Dynamic inventory from Incus instances. |
+
+### Configuration Example
+Create a file named `incus_inventory.yml`:
+
+```yaml
+plugin: crystian.incus.incus_inventory
+remotes:
+  - local
+projects:
+  - default
+keyed_groups:
+  - prefix: tag
+    key: incus_user_tags
+```
+
+### Usage
+```bash
+ansible-inventory -i incus_inventory.yml --graph
+```
+
+For more details and advanced usage (grouping by OS, custom variables), see [Inventory Plugin Documentation](docs/incus_inventory.md).
+
 ## Usage Examples
 
 ### Create a Container
@@ -77,6 +106,10 @@ ansible-galaxy collection install crystian-incus-1.0.0.tar.gz
     name: my-container
     remote_image: images:debian/12
     state: present
+    tags:
+      env: prod
+      app: web
+      owner: team-a
     started: true
 ```
 
@@ -127,6 +160,9 @@ ansible-galaxy collection install crystian-incus-1.0.0.tar.gz
     instance_name: my-container
     config:
       limits.memory: 4GiB
+    tags:
+      maintenance: "true"
+
 ```
 
 ### Manage Files

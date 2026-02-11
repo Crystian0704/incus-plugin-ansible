@@ -1,0 +1,8 @@
+plugin: crystian.incus.incus_inventory
+remotes:
+  - local
+projects:
+  - default
+keyed_groups:
+  - prefix: tag
+    key: incus_user_tags

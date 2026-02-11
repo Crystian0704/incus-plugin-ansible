@@ -3,13 +3,11 @@ import glob
 import re
 import yaml
 def extract_block(content, block_name):
-    # Try single quotes
     pattern = r"{}\s*=\s*r?'''(.*?)'''".format(block_name)
     match = re.search(pattern, content, re.DOTALL)
     if match:
         return match.group(1)
     
-    # Try double quotes
     pattern = r'{}\s*=\s*r?"""(.*?)"""'.format(block_name)
     match = re.search(pattern, content, re.DOTALL)
     if match:
@@ -92,7 +90,12 @@ def main():
                  md_content += return_str.strip() + "\n"
                  md_content += "```\n"
             
-            output_path = os.path.join(docs_dir, f"{module_name}.md")
+            if 'Lookup' in plugin_type:
+                 output_filename = f"{module_name}_lookup.md"
+            else:
+                 output_filename = f"{module_name}.md"
+            
+            output_path = os.path.join(docs_dir, output_filename)
             with open(output_path, 'w') as f:
                 f.write(md_content)
             print(f"Generated {output_path}")

@@ -135,6 +135,12 @@ options:
     type: bool
     default: false
     required: false
+  tags:
+    description:
+      - Dictionary of tags to apply to the instance.
+      - Maps to 'user.<key>' configuration keys.
+    type: dict
+    required: false
   rename_from:
     description:
       - Name of an existing instance to rename to 'name'.
@@ -194,7 +200,6 @@ class IncusInstance(object):
         self.devices = module.params['devices'] or {}
         self.storage = module.params['storage']
         self.network = module.params['network']
-
         self.target = module.params['target']
         self.description = module.params['description']
         self.empty = module.params.get('empty', False)
@@ -205,6 +210,12 @@ class IncusInstance(object):
         self.network_config = module.params.get('cloud_init_network_config')
         self.vendor_data = module.params.get('cloud_init_vendor_data')
         self.cloud_init_disk = module.params.get('cloud_init_disk')
+        self.tags = module.params.get('tags')
+        
+        if self.tags:
+            for k, v in self.tags.items():
+                self.config['user.{}'.format(k)] = v
+                
         if self.user_data:
             self.config['cloud-init.user-data'] = self.user_data
         if self.network_config:
@@ -442,6 +453,7 @@ def main():
             cloud_init_vendor_data=dict(type='str', required=False),
             cloud_init_disk=dict(type='bool', default=False, required=False),
             rename_from=dict(type='str', required=False),
+            tags=dict(type='dict', required=False),
         ),
         supports_check_mode=True,
     )

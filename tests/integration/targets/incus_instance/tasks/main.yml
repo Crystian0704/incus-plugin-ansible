@@ -16,6 +16,77 @@
     - instance-running-delete
   ignore_errors: true
 
+- name: Test incus_instance with tags
+  crystian.incus.incus_instance:
+    name: test-tags
+    remote_image: images:alpine/edge
+    remote: "{{ target_remote | default(omit) }}"
+    tags:
+      env: production
+      role: backend
+    started: true
+  register: result_tags
+
+- name: Verify tags creation
+  assert:
+    that:
+      - result_tags.changed == true
+      - result_tags.instance.config['user.env'] == "production"
+      - result_tags.instance.config['user.role'] == "backend"
+
+- name: Update tags via incus_config
+  crystian.incus.incus_config:
+    instance_name: test-tags
+    remote: "{{ target_remote | default(omit) }}"
+    tags:
+      role: frontend
+      owner: me
+    state: present
+  register: result_tags_update
+
+- name: Verify tags update
+  crystian.incus.incus_info:
+    name: test-tags
+    remote: "{{ target_remote | default(omit) }}"
+  register: info_tags
+
+- name: Assert updated tags
+  assert:
+    that:
+      - result_tags_update.changed == true
+      - info_tags.info.config['user.env'] == "production"
+      - info_tags.info.config['user.role'] == "frontend"
+      - info_tags.info.config['user.owner'] == "me"
+
+- name: Remove tags via incus_config
+  crystian.incus.incus_config:
+    instance_name: test-tags
+    remote: "{{ target_remote | default(omit) }}"
+    tags:
+      owner: null
+    state: absent
+  register: result_tags_remove
+
+- name: Verify tags removal
+  crystian.incus.incus_info:
+    name: test-tags
+    remote: "{{ target_remote | default(omit) }}"
+  register: info_tags_removed
+
+- name: Assert removed tags
+  assert:
+    that:
+      - result_tags_remove.changed == true
+      - "'user.owner' not in info_tags_removed.info.config"
+      - info_tags_removed.info.config['user.role'] == "frontend"
+
+- name: Cleanup tags test
+  crystian.incus.incus_instance:
+    name: test-tags
+    remote: "{{ target_remote | default(omit) }}"
+    state: absent
+    force: true
+
 - name: Test incus_instance (init behavior - stopped)
   crystian.incus.incus_instance:
     name: test-ansible-init
