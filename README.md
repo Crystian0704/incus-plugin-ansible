@@ -70,96 +70,30 @@ ansible-galaxy collection install crystian-incus-1.0.0.tar.gz
 
 ## Inventory Plugin
 
-The collection includes a dynamic inventory plugin to query Incus instances.
+The collection includes a dynamic inventory plugin that automatically discovers Incus instances and makes them available as Ansible hosts — **no need to maintain static inventory files manually**.
+
+The plugin:
+- Queries all configured remotes and projects for running instances.
+- Creates **automatic groups** by remote (`incus_remote_local`), project (`incus_project_default`), and tags (`tag_env_prod`).
+- Sets `ansible_connection: community.general.incus` so Ansible connects directly to containers/VMs via Incus.
+- Exposes all `user.*` config keys as host variables for flexible grouping and filtering.
 
 | Plugin | Description |
 |---|---|
 | `incus_inventory` | Dynamic inventory from Incus instances. |
 
-### Configuration
-Create a file named `incus_inventory.yml`:
+### Quick Start
 
+1. Create `incus_inventory.yml`:
 ```yaml
 plugin: crystian.incus.incus_inventory
-remotes:
-  - local
-projects:
-  - default
 keyed_groups:
   - prefix: tag
     key: incus_user_tags
 ```
 
-### Filter by Tags
-Filter instances by `user.*` config keys:
-
-```yaml
-plugin: crystian.incus.incus_inventory
-tags:
-  env: prod
-  role: webserver
-projects:
-  - default
-keyed_groups:
-  - prefix: tag
-    key: incus_user_tags
-```
-
-### Testing the Inventory
-```bash
-# View the inventory tree
-ansible-inventory -i incus_inventory.yml --graph
-
-# View all host variables
-ansible-inventory -i incus_inventory.yml --list
-
-# Generate a static inventory file
-ansible-inventory -i incus_inventory.yml --list --output inventory.json
-```
-
-> [!NOTE]
-> The inventory file **must** be named `*incus_inventory.yml` or `*incus_inventory.yaml`.
-> Enable the plugin in `ansible.cfg`:
-> ```ini
-> [inventory]
-> enable_plugins = crystian.incus.incus_inventory, yaml
-> ```
-
-### Using in Playbooks and Roles
-
-Use the dynamic inventory directly with your playbooks:
-
-```bash
-ansible-playbook -i incus_inventory.yml site.yml
-```
-
-Target specific groups created by the plugin:
-
-```yaml
-# Target all instances with tag env=prod
-- hosts: tag_env_prod
-  tasks:
-    - name: Update packages
-      apt:
-        upgrade: dist
-
-# Target instances on a specific remote
-- hosts: incus_remote_production
-  tasks:
-    - name: Check uptime
-      command: uptime
-
-# Target by project
-- hosts: incus_project_mywebapp
-  roles:
-    - webserver
-    - monitoring
-```
-
-Combine with `ansible.cfg` for a seamless workflow:
-
+2. Enable the plugin in `ansible.cfg`:
 ```ini
-# ansible.cfg
 [defaults]
 inventory = incus_inventory.yml
 
@@ -167,13 +101,152 @@ inventory = incus_inventory.yml
 enable_plugins = crystian.incus.incus_inventory, yaml
 ```
 
+3. Verify:
 ```bash
-# No -i flag needed
-ansible-playbook site.yml
-ansible tag_env_prod -m ping
+ansible-inventory --graph
 ```
 
-For more details and advanced usage (grouping by OS, custom variables, compose), see [Inventory Plugin Documentation](docs/incus_inventory.md).
+> [!NOTE]
+> The inventory file **must** be named `*incus_inventory.yml` or `*incus_inventory.yaml`.
+
+### Auto-Generated Groups
+
+When your instances have tags (set via `incus_instance` or `incus_config`), the plugin creates groups automatically:
+
+```yaml
+# Instance created with:
+- crystian.incus.incus_instance:
+    name: web-01
+    remote_image: images:debian/12
+    tags:
+      env: prod
+      role: webserver
+      team: platform
+```
+
+Results in the following inventory groups:
+```
+@all:
+  |--@incus_remote_local:
+  |  |--web-01
+  |--@incus_project_default:
+  |  |--web-01
+  |--@tag_env_prod:
+  |  |--web-01
+  |--@tag_role_webserver:
+  |  |--web-01
+  |--@tag_team_platform:
+  |  |--web-01
+```
+
+### Filter by Tags
+
+Only include instances matching specific tags — useful for targeting a subset of infrastructure:
+
+```yaml
+plugin: crystian.incus.incus_inventory
+tags:
+  env: prod
+  role: webserver
+keyed_groups:
+  - prefix: tag
+    key: incus_user_tags
+```
+
+### Multi-Remote and Multi-Project
+
+Query instances across multiple Incus remotes and projects:
+
+```yaml
+plugin: crystian.incus.incus_inventory
+remotes:
+  - local
+  - staging-server
+  - production-server
+projects:
+  - default
+  - webapp
+  - database
+keyed_groups:
+  - prefix: tag
+    key: incus_user_tags
+```
+
+### Using in Playbooks
+
+Target groups created by the plugin in your playbooks:
+
+```yaml
+# Deploy to all production web servers
+- hosts: tag_env_prod:&tag_role_webserver
+  tasks:
+    - name: Deploy application
+      ansible.builtin.copy:
+        src: app/
+        dest: /opt/app/
+
+# Update all instances on a specific remote
+- hosts: incus_remote_production
+  tasks:
+    - name: Update packages
+      apt:
+        upgrade: dist
+
+# Configure all databases in the webapp project
+- hosts: incus_project_webapp:&tag_role_database
+  roles:
+    - role: postgresql
+      vars:
+        pg_version: 15
+```
+
+### Ad-Hoc Commands
+
+Run commands directly against inventory groups:
+
+```bash
+# Ping all production instances
+ansible tag_env_prod -m ping
+
+# Check disk usage on all web servers
+ansible tag_role_webserver -a "df -h"
+
+# Restart nginx on staging
+ansible tag_env_staging:&tag_role_webserver -m service -a "name=nginx state=restarted"
+```
+
+### Advanced: Custom Groups and Variables with Compose
+
+Use `groups` for conditional grouping and `compose` for dynamic host variables:
+
+```yaml
+plugin: crystian.incus.incus_inventory
+keyed_groups:
+  - prefix: tag
+    key: incus_user_tags
+  - prefix: os
+    key: incus_config_image_os
+groups:
+  webservers: "'webserver' == tag_role"
+  production: "'prod' == tag_env"
+  high_memory: "incus_config_limits_memory | default('1GiB') | regex_search('[0-9]+') | int >= 4"
+compose:
+  ansible_user: "'ubuntu' if incus_config_image_os == 'ubuntu' else 'root'"
+```
+
+### Generate Static Inventory
+
+Export the dynamic inventory to a static file for offline use or CI/CD:
+
+```bash
+# Full inventory as JSON
+ansible-inventory -i incus_inventory.yml --list --output inventory.json
+
+# Filtered inventory as YAML
+ansible-inventory -i prod_incus_inventory.yml --list --yaml > prod_inventory.yml
+```
+
+For the complete reference, see [Inventory Plugin Documentation](docs/incus_inventory.md).
 
 ## Usage Examples
 
