@@ -105,7 +105,7 @@
     remote_image: "images:alpine/edge/cloud"
     remote: "{{ target_remote | default(omit) }}"
     started: true
-    cloud_init_user_data: "{{ lookup('template', playbook_dir ~ '/integration/targets/incus_instance_cloud_init/templates/cloud-config.j2') }}"
+    cloud_init_user_data: "{{ lookup('template', role_path ~ '/templates/cloud-config.j2') }}"
   vars:
     touch_file: "template.ran"
   register: template_result

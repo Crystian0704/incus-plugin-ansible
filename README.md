@@ -76,7 +76,7 @@ The collection includes a dynamic inventory plugin to query Incus instances.
 |---|---|
 | `incus_inventory` | Dynamic inventory from Incus instances. |
 
-### Configuration Example
+### Configuration
 Create a file named `incus_inventory.yml`:
 
 ```yaml
@@ -90,12 +90,90 @@ keyed_groups:
     key: incus_user_tags
 ```
 
-### Usage
-```bash
-ansible-inventory -i incus_inventory.yml --graph
+### Filter by Tags
+Filter instances by `user.*` config keys:
+
+```yaml
+plugin: crystian.incus.incus_inventory
+tags:
+  env: prod
+  role: webserver
+projects:
+  - default
+keyed_groups:
+  - prefix: tag
+    key: incus_user_tags
 ```
 
-For more details and advanced usage (grouping by OS, custom variables), see [Inventory Plugin Documentation](docs/incus_inventory.md).
+### Testing the Inventory
+```bash
+# View the inventory tree
+ansible-inventory -i incus_inventory.yml --graph
+
+# View all host variables
+ansible-inventory -i incus_inventory.yml --list
+
+# Generate a static inventory file
+ansible-inventory -i incus_inventory.yml --list --output inventory.json
+```
+
+> [!NOTE]
+> The inventory file **must** be named `*incus_inventory.yml` or `*incus_inventory.yaml`.
+> Enable the plugin in `ansible.cfg`:
+> ```ini
+> [inventory]
+> enable_plugins = crystian.incus.incus_inventory, yaml
+> ```
+
+### Using in Playbooks and Roles
+
+Use the dynamic inventory directly with your playbooks:
+
+```bash
+ansible-playbook -i incus_inventory.yml site.yml
+```
+
+Target specific groups created by the plugin:
+
+```yaml
+# Target all instances with tag env=prod
+- hosts: tag_env_prod
+  tasks:
+    - name: Update packages
+      apt:
+        upgrade: dist
+
+# Target instances on a specific remote
+- hosts: incus_remote_production
+  tasks:
+    - name: Check uptime
+      command: uptime
+
+# Target by project
+- hosts: incus_project_mywebapp
+  roles:
+    - webserver
+    - monitoring
+```
+
+Combine with `ansible.cfg` for a seamless workflow:
+
+```ini
+# ansible.cfg
+[defaults]
+inventory = incus_inventory.yml
+
+[inventory]
+enable_plugins = crystian.incus.incus_inventory, yaml
+```
+
+```bash
+# No -i flag needed
+ansible-playbook site.yml
+ansible tag_env_prod -m ping
+```
+
+For more details and advanced usage (grouping by OS, custom variables, compose), see [Inventory Plugin Documentation](docs/incus_inventory.md).
 
 ## Usage Examples
 
@@ -270,6 +348,17 @@ ansible-playbook tests/integration.yml --tags incus_instance
 
 # Force infrastructure recreation
 ansible-playbook tests/integration.yml -e delete_infra=true
+```
+
+### Testing the Inventory Plugin
+The inventory plugin has its own integration test that validates instance discovery, tag filtering, and group creation:
+
+```bash
+# Using ansible-test (requires collection structure)
+ansible-test integration incus_inventory -v --local
+
+# Or via the full suite
+ansible-playbook tests/integration.yml --tags incus_inventory
 ```
 
 ## Known Limitations

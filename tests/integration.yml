@@ -50,6 +50,10 @@
       import_tasks: integration/targets/incus_snapshot/tasks/main.yml
       tags: [incus_snapshot]
 
+    - name: Test incus_inventory
+      import_tasks: integration/targets/incus_inventory/tasks/main.yml
+      tags: [incus_inventory]
+
     - name: Test incus_export
       import_tasks: integration/targets/incus_export/tasks/main.yml
       tags: [incus_export]

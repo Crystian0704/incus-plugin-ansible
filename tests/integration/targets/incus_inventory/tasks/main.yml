@@ -1,0 +1,106 @@
+---
+- name: Verify inventory plugin integration
+  block:
+    - name: Create a test instance for inventory check
+      crystian.incus.incus_instance:
+        name: inventory-test-vm
+        remote_image: images:debian/12
+        state: present
+        started: true
+        tags:
+          env: integration
+          role: worker
+      register: instance_create
+
+    - name: Wait for instance to be ready
+      wait_for:
+        timeout: 10
+
+    - name: Determine collections path
+      set_fact:
+        collections_path: "{{ (playbook_dir | regex_replace('/tests/.*$', '')) | regex_replace('/ansible_collections/.*$', '') }}"
+
+    - name: Create filtered inventory directory
+      file:
+        path: /tmp/inv_filtered
+        state: directory
+
+    - name: Create filtered inventory file
+      copy:
+        dest: /tmp/inv_filtered/incus_inventory.yml
+        content: |
+          plugin: crystian.incus.incus_inventory
+          tags:
+            env: integration
+          projects:
+            - default
+          keyed_groups:
+            - prefix: tag
+              key: incus_user_tags
+
+    - name: Run ansible-inventory to check groups
+      command: >
+        ansible-inventory
+        -i /tmp/inv_filtered/incus_inventory.yml
+        --graph
+      environment:
+        ANSIBLE_INVENTORY_ENABLED: "crystian.incus.incus_inventory,yaml"
+        ANSIBLE_COLLECTIONS_PATH: "{{ collections_path }}"
+      register: inventory_graph
+
+    - name: Verify instance is in inventory
+      assert:
+        that:
+          - "'inventory-test-vm' in inventory_graph.stdout"
+          - "'@incus_remote_local' in inventory_graph.stdout"
+          - "'@tag_env_integration' in inventory_graph.stdout"
+
+    - name: Create excluded inventory directory
+      file:
+        path: /tmp/inv_excluded
+        state: directory
+
+    - name: Create excluded inventory file
+      copy:
+        dest: /tmp/inv_excluded/incus_inventory.yml
+        content: |
+          plugin: crystian.incus.incus_inventory
+          tags:
+            env: prod
+          projects:
+            - default
+          keyed_groups:
+            - prefix: tag
+              key: incus_user_tags
+
+    - name: Verify exclusion filter
+      command: >
+        ansible-inventory
+        -i /tmp/inv_excluded/incus_inventory.yml
+        --graph
+      environment:
+        ANSIBLE_INVENTORY_ENABLED: "crystian.incus.incus_inventory,yaml"
+        ANSIBLE_COLLECTIONS_PATH: "{{ collections_path }}"
+      register: inventory_graph_excluded
+
+    - name: Verify instance is excluded
+      assert:
+        that:
+          - "'inventory-test-vm' not in inventory_graph_excluded.stdout"
+
+  always:
+    - name: Cleanup test instance
+      crystian.incus.incus_instance:
+        name: inventory-test-vm
+        state: absent
+        force: true
+      ignore_errors: true
+
+    - name: Cleanup temp dirs
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /tmp/inv_filtered
+        - /tmp/inv_excluded
+      ignore_errors: true
