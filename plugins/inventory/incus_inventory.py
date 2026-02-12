@@ -50,6 +50,7 @@ DOCUMENTATION = r'''
 '''
 
 EXAMPLES = r'''
+# Basic usage
 plugin: crystian.incus.incus_inventory
 remotes:
   - local
@@ -57,13 +58,37 @@ projects:
   - default
   - mywebproject
 
+# Group by tags
 plugin: crystian.incus.incus_inventory
 keyed_groups:
   - prefix: tag
     key: incus_user_tags
 
+# Filter by tags
+plugin: crystian.incus.incus_inventory
 tags:
   env: prod
+
+# Group by OS and architecture
+plugin: crystian.incus.incus_inventory
+keyed_groups:
+  - prefix: os
+    key: incus_config_image_os
+  - prefix: arch
+    key: incus_config_image_architecture
+
+# Custom groups with conditions
+plugin: crystian.incus.incus_inventory
+groups:
+  webservers: "'web' == tag_service"
+  production_db: "'prod' == tag_env and 'db' == tag_role"
+  high_performance: "incus_config_limits_cpu | default('1') | int >= 4"
+
+# Setting variables with compose
+plugin: crystian.incus.incus_inventory
+compose:
+  ansible_user: "'ubuntu' if incus_config_image_os == 'ubuntu' else 'root'"
+  ansible_host: "incus_config_user_internal_ip | default(ansible_host)"
 '''
 
 import json

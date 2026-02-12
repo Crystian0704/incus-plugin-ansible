@@ -20,7 +20,8 @@ def main():
         os.makedirs(docs_dir)
     dirs_to_scan = [
         ('plugins/modules', 'Module'),
-        ('plugins/lookup', 'Lookup Plugin')
+        ('plugins/lookup', 'Lookup Plugin'),
+        ('plugins/inventory', 'Inventory Plugin')
     ]
     
     if not os.path.exists(docs_dir):
