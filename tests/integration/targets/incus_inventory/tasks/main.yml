@@ -1,18 +1,39 @@
 ---
 - name: Verify inventory plugin integration
   block:
-    - name: Create a test instance for inventory check
+    - name: Create web instance with tags
       crystian.incus.incus_instance:
-        name: inventory-test-vm
+        name: inv-web-01
+        remote_image: images:debian/12
+        state: present
+        started: true
+        tags:
+          env: integration
+          role: webserver
+          team: platform
+
+    - name: Create worker instance with tags
+      crystian.incus.incus_instance:
+        name: inv-worker-01
         remote_image: images:debian/12
         state: present
         started: true
         tags:
           env: integration
           role: worker
-      register: instance_create
+          team: backend
 
-    - name: Wait for instance to be ready
+    - name: Create stopped instance (for running_only test)
+      crystian.incus.incus_instance:
+        name: inv-stopped-01
+        remote_image: images:debian/12
+        state: present
+        started: false
+        tags:
+          env: integration
+          role: idle
+
+    - name: Wait for instances to be ready
       wait_for:
         timeout: 10
 
@@ -20,14 +41,281 @@
       set_fact:
         collections_path: "{{ (playbook_dir | regex_replace('/tests/.*$', '')) | regex_replace('/ansible_collections/.*$', '') }}"
 
-    - name: Create filtered inventory directory
+    - name: Shared environment for ansible-inventory
+      set_fact:
+        inv_env:
+          ANSIBLE_INVENTORY_ENABLED: "crystian.incus.incus_inventory,yaml"
+          ANSIBLE_COLLECTIONS_PATH: "{{ collections_path }}"
+
+    - name: "Create basic inventory with keyed_groups"
       file:
-        path: /tmp/inv_filtered
+        path: /tmp/inv_basic
         state: directory
 
-    - name: Create filtered inventory file
+    - name: "Write inventory file"
       copy:
-        dest: /tmp/inv_filtered/incus_inventory.yml
+        dest: /tmp/inv_basic/incus_inventory.yml
+        content: |
+          plugin: crystian.incus.incus_inventory
+          projects:
+            - default
+          keyed_groups:
+            - prefix: tag
+              key: incus_user_tags
+
+    - name: "Run ansible-inventory --graph"
+      command: ansible-inventory -i /tmp/inv_basic/incus_inventory.yml --graph
+      environment: "{{ inv_env }}"
+      register: graph_basic
+
+    - name: "Assert auto-generated groups exist"
+      assert:
+        that:
+          - "'@incus_remote_local' in graph_basic.stdout"
+          - "'@incus_project_default' in graph_basic.stdout"
+          - "'@tag_env_integration' in graph_basic.stdout"
+          - "'@tag_role_webserver' in graph_basic.stdout"
+          - "'@tag_role_worker' in graph_basic.stdout"
+          - "'@tag_team_platform' in graph_basic.stdout"
+          - "'@tag_team_backend' in graph_basic.stdout"
+          - "'inv-web-01' in graph_basic.stdout"
+          - "'inv-worker-01' in graph_basic.stdout"
+          - "'inv-stopped-01' in graph_basic.stdout"
+        fail_msg: "Auto-generated groups not created properly"
+
+    - name: "Create tag-filtered inventory"
+      file:
+        path: /tmp/inv_tag_filter
+        state: directory
+
+    - name: "Write inventory file (role=webserver)"
+      copy:
+        dest: /tmp/inv_tag_filter/incus_inventory.yml
+        content: |
+          plugin: crystian.incus.incus_inventory
+          tags:
+            role: webserver
+          projects:
+            - default
+          keyed_groups:
+            - prefix: tag
+              key: incus_user_tags
+
+    - name: "Run ansible-inventory --graph"
+      command: ansible-inventory -i /tmp/inv_tag_filter/incus_inventory.yml --graph
+      environment: "{{ inv_env }}"
+      register: graph_tag_filter
+
+    - name: "Assert only webserver instance appears"
+      assert:
+        that:
+          - "'inv-web-01' in graph_tag_filter.stdout"
+          - "'inv-worker-01' not in graph_tag_filter.stdout"
+          - "'inv-stopped-01' not in graph_tag_filter.stdout"
+        fail_msg: "Tag filter (role=webserver) did not work"
+
+    - name: "Create multi-tag inventory"
+      file:
+        path: /tmp/inv_multi_tag
+        state: directory
+
+    - name: "Write inventory file (env=integration AND role=worker)"
+      copy:
+        dest: /tmp/inv_multi_tag/incus_inventory.yml
+        content: |
+          plugin: crystian.incus.incus_inventory
+          tags:
+            env: integration
+            role: worker
+          projects:
+            - default
+          keyed_groups:
+            - prefix: tag
+              key: incus_user_tags
+
+    - name: "Run ansible-inventory --graph"
+      command: ansible-inventory -i /tmp/inv_multi_tag/incus_inventory.yml --graph
+      environment: "{{ inv_env }}"
+      register: graph_multi_tag
+
+    - name: "Assert only worker instance appears"
+      assert:
+        that:
+          - "'inv-worker-01' in graph_multi_tag.stdout"
+          - "'inv-web-01' not in graph_multi_tag.stdout"
+        fail_msg: "Multi-tag filter (env=integration, role=worker) did not work"
+
+    - name: "Create excluded inventory"
+      file:
+        path: /tmp/inv_excluded
+        state: directory
+
+    - name: "Write inventory file (env=prod)"
+      copy:
+        dest: /tmp/inv_excluded/incus_inventory.yml
+        content: |
+          plugin: crystian.incus.incus_inventory
+          tags:
+            env: prod
+          projects:
+            - default
+
+    - name: "Run ansible-inventory --graph"
+      command: ansible-inventory -i /tmp/inv_excluded/incus_inventory.yml --graph
+      environment: "{{ inv_env }}"
+      register: graph_excluded
+
+    - name: "Assert no test instances appear"
+      assert:
+        that:
+          - "'inv-web-01' not in graph_excluded.stdout"
+          - "'inv-worker-01' not in graph_excluded.stdout"
+          - "'inv-stopped-01' not in graph_excluded.stdout"
+        fail_msg: "Exclusion filter failed - instances with env=integration appeared for env=prod"
+
+    - name: "Create running_only inventory"
+      file:
+        path: /tmp/inv_running
+        state: directory
+
+    - name: "Write inventory file (running_only=true)"
+      copy:
+        dest: /tmp/inv_running/incus_inventory.yml
+        content: |
+          plugin: crystian.incus.incus_inventory
+          tags:
+            env: integration
+          running_only: true
+          projects:
+            - default
+          keyed_groups:
+            - prefix: tag
+              key: incus_user_tags
+
+    - name: "Run ansible-inventory --graph"
+      command: ansible-inventory -i /tmp/inv_running/incus_inventory.yml --graph
+      environment: "{{ inv_env }}"
+      register: graph_running
+
+    - name: "Assert stopped instance is excluded"
+      assert:
+        that:
+          - "'inv-web-01' in graph_running.stdout"
+          - "'inv-worker-01' in graph_running.stdout"
+          - "'inv-stopped-01' not in graph_running.stdout"
+        fail_msg: "running_only filter did not exclude stopped instance"
+
+    - name: "Create keyed_groups OS inventory"
+      file:
+        path: /tmp/inv_os_groups
+        state: directory
+
+    - name: "Write inventory file (keyed_groups by OS)"
+      copy:
+        dest: /tmp/inv_os_groups/incus_inventory.yml
+        content: |
+          plugin: crystian.incus.incus_inventory
+          tags:
+            env: integration
+          projects:
+            - default
+          keyed_groups:
+            - prefix: os
+              key: incus_config_image_os
+            - prefix: tag
+              key: incus_user_tags
+
+    - name: "Run ansible-inventory --graph"
+      command: ansible-inventory -i /tmp/inv_os_groups/incus_inventory.yml --graph
+      environment: "{{ inv_env }}"
+      register: graph_os
+
+    - name: "Assert OS-based groups exist"
+      assert:
+        that:
+          - "'@os_Debian' in graph_os.stdout or '@os_debian' in graph_os.stdout"
+        fail_msg: "OS-based keyed_groups were not created"
+
+    - name: "Create groups inventory"
+      file:
+        path: /tmp/inv_groups
+        state: directory
+
+    - name: "Write inventory file (conditional groups)"
+      copy:
+        dest: /tmp/inv_groups/incus_inventory.yml
+        content: |
+          plugin: crystian.incus.incus_inventory
+          tags:
+            env: integration
+          projects:
+            - default
+          keyed_groups:
+            - prefix: tag
+              key: incus_user_tags
+          groups:
+            webservers: "tag_role | default('') == 'webserver'"
+            workers: "tag_role | default('') == 'worker'"
+            platform_team: "tag_team | default('') == 'platform'"
+
+    - name: "Run ansible-inventory --graph"
+      command: ansible-inventory -i /tmp/inv_groups/incus_inventory.yml --graph
+      environment: "{{ inv_env }}"
+      register: graph_groups
+
+    - name: "Assert conditional groups exist with correct members"
+      assert:
+        that:
+          - "'@webservers' in graph_groups.stdout"
+          - "'@workers' in graph_groups.stdout"
+          - "'@platform_team' in graph_groups.stdout"
+        fail_msg: "Conditional groups were not created"
+
+    - name: "Create compose inventory"
+      file:
+        path: /tmp/inv_compose
+        state: directory
+
+    - name: "Write inventory file (compose variables)"
+      copy:
+        dest: /tmp/inv_compose/incus_inventory.yml
+        content: |
+          plugin: crystian.incus.incus_inventory
+          tags:
+            role: webserver
+          projects:
+            - default
+          compose:
+            custom_var: "'hello_' ~ inventory_hostname"
+            ansible_user: "'root'"
+
+    - name: "Generate JSON inventory file"
+      shell: >
+        ansible-inventory
+        -i /tmp/inv_compose/incus_inventory.yml
+        --list --output /tmp/inv_compose/output.json
+      environment: "{{ inv_env }}"
+
+    - name: "Load generated inventory"
+      include_vars:
+        file: /tmp/inv_compose/output.json
+        name: compose_data
+
+    - name: "Assert compose variables are set"
+      assert:
+        that:
+          - "compose_data['_meta']['hostvars']['inv-web-01']['custom_var'] == 'hello_inv-web-01'"
+          - "compose_data['_meta']['hostvars']['inv-web-01']['ansible_user'] == 'root'"
+        fail_msg: "Compose variables were not set correctly"
+
+    - name: "Create basic list inventory"
+      file:
+        path: /tmp/inv_list
+        state: directory
+
+    - name: "Write inventory file"
+      copy:
+        dest: /tmp/inv_list/incus_inventory.yml
         content: |
           plugin: crystian.incus.incus_inventory
           tags:
@@ -38,62 +326,51 @@
             - prefix: tag
               key: incus_user_tags
 
-    - name: Run ansible-inventory to check groups
-      command: >
+    - name: "Generate JSON inventory file"
+      shell: >
         ansible-inventory
-        -i /tmp/inv_filtered/incus_inventory.yml
-        --graph
-      environment:
-        ANSIBLE_INVENTORY_ENABLED: "crystian.incus.incus_inventory,yaml"
-        ANSIBLE_COLLECTIONS_PATH: "{{ collections_path }}"
-      register: inventory_graph
+        -i /tmp/inv_list/incus_inventory.yml
+        --list --output /tmp/inv_list/output.json
+      environment: "{{ inv_env }}"
 
-    - name: Verify instance is in inventory
+    - name: "Load generated inventory"
+      include_vars:
+        file: /tmp/inv_list/output.json
+        name: inv_data
+
+    - name: "Assert JSON structure is valid"
       assert:
         that:
-          - "'inventory-test-vm' in inventory_graph.stdout"
-          - "'@incus_remote_local' in inventory_graph.stdout"
-          - "'@tag_env_integration' in inventory_graph.stdout"
+          - "'_meta' in inv_data"
+          - "'hostvars' in inv_data['_meta']"
+          - "'inv-web-01' in inv_data['_meta']['hostvars']"
+          - "'inv-worker-01' in inv_data['_meta']['hostvars']"
+          - "'incus_remote_local' in inv_data"
+          - "'tag_env_integration' in inv_data"
+          - "'ansible_connection' in inv_data['_meta']['hostvars']['inv-web-01']"
+          - "inv_data['_meta']['hostvars']['inv-web-01']['ansible_connection'] == 'community.general.incus'"
+          - "'incus_user_tags' in inv_data['_meta']['hostvars']['inv-web-01']"
+        fail_msg: "JSON inventory structure is invalid"
 
-    - name: Create excluded inventory directory
-      file:
-        path: /tmp/inv_excluded
-        state: directory
-
-    - name: Create excluded inventory file
-      copy:
-        dest: /tmp/inv_excluded/incus_inventory.yml
-        content: |
-          plugin: crystian.incus.incus_inventory
-          tags:
-            env: prod
-          projects:
-            - default
-          keyed_groups:
-            - prefix: tag
-              key: incus_user_tags
-
-    - name: Verify exclusion filter
-      command: >
-        ansible-inventory
-        -i /tmp/inv_excluded/incus_inventory.yml
-        --graph
-      environment:
-        ANSIBLE_INVENTORY_ENABLED: "crystian.incus.incus_inventory,yaml"
-        ANSIBLE_COLLECTIONS_PATH: "{{ collections_path }}"
-      register: inventory_graph_excluded
-
-    - name: Verify instance is excluded
+    - name: "Assert host variables include tags"
       assert:
         that:
-          - "'inventory-test-vm' not in inventory_graph_excluded.stdout"
+          - "inv_data['_meta']['hostvars']['inv-web-01']['tag_env'] == 'integration'"
+          - "inv_data['_meta']['hostvars']['inv-web-01']['tag_role'] == 'webserver'"
+          - "inv_data['_meta']['hostvars']['inv-web-01']['tag_team'] == 'platform'"
+          - "inv_data['_meta']['hostvars']['inv-web-01']['incus_user_tags']['env'] == 'integration'"
+        fail_msg: "Host variables don't include expected tag values"
 
   always:
-    - name: Cleanup test instance
+    - name: Cleanup test instances
       crystian.incus.incus_instance:
-        name: inventory-test-vm
+        name: "{{ item }}"
         state: absent
         force: true
+      loop:
+        - inv-web-01
+        - inv-worker-01
+        - inv-stopped-01
       ignore_errors: true
 
     - name: Cleanup temp dirs
@@ -101,6 +378,13 @@
         path: "{{ item }}"
         state: absent
       loop:
-        - /tmp/inv_filtered
+        - /tmp/inv_basic
+        - /tmp/inv_tag_filter
+        - /tmp/inv_multi_tag
         - /tmp/inv_excluded
+        - /tmp/inv_running
+        - /tmp/inv_os_groups
+        - /tmp/inv_groups
+        - /tmp/inv_compose
+        - /tmp/inv_list
       ignore_errors: true

@@ -405,34 +405,61 @@ Integration tests are included to validate the functionality of the collection.
 ### Prerequisites
 - Incus server running and configured on the local machine (`incus admin init`).
 - `incus` client available in PATH.
-- Permissions to manage incus (membership in `incus`).
+- Permissions to manage Incus (membership in `incus` group).
+- Python virtual environment with `ansible-test` installed (`.venv/`).
 
-### Running Integration Suite
-Run the full integration test suite using `ansible-playbook`:
+### Setup
 
-```bash
-ansible-playbook tests/integration.yml
-```
-
-You can also run specific module tests using tags:
-```bash
-# Test only incus_instance module
-ansible-playbook tests/integration.yml --tags incus_instance
-
-# Force infrastructure recreation
-ansible-playbook tests/integration.yml -e delete_infra=true
-```
-
-### Testing the Inventory Plugin
-The inventory plugin has its own integration test that validates instance discovery, tag filtering, and group creation:
+The `ansible-test` tool requires the collection to be in the standard directory structure. Copy the repository into the correct path before running tests:
 
 ```bash
-# Using ansible-test (requires collection structure)
-ansible-test integration incus_inventory -v --local
+# Copy collection to expected path
+rm -rf ~/.ansible/collections/ansible_collections/crystian/incus
+mkdir -p ~/.ansible/collections/ansible_collections/crystian/incus
+cp -a . ~/.ansible/collections/ansible_collections/crystian/incus/
 
-# Or via the full suite
-ansible-playbook tests/integration.yml --tags incus_inventory
+# Navigate to the collection directory
+cd ~/.ansible/collections/ansible_collections/crystian/incus
 ```
+
+### Running Integration Tests
+
+```bash
+# Run the full integration suite
+.venv/bin/ansible-test integration -v --local
+
+# Run a specific test target
+.venv/bin/ansible-test integration incus_instance -v --local
+.venv/bin/ansible-test integration incus_inventory -v --local
+.venv/bin/ansible-test integration incus_network -v --local
+
+# Resume from a specific target (after failure)
+.venv/bin/ansible-test integration --start-at incus_inventory -v --local
+```
+
+### Available Test Targets
+
+| Target | Tests |
+|--------|-------|
+| `incus_admin_init` | Server initialization |
+| `incus_instance` | Instance CRUD, rename, type |
+| `incus_instance_cloud_init` | Cloud-init config and templates |
+| `incus_config` | Instance config and devices |
+| `incus_exec` | Command execution in instances |
+| `incus_file` | File push/pull operations |
+| `incus_export` | Instance backup export |
+| `incus_image` | Image management |
+| `incus_info` | Resource information queries |
+| `incus_list` | Instance listing with filters |
+| `incus_inventory` | Dynamic inventory (tags, groups, compose) |
+| `incus_lookup` | Lookup plugins (config, list, info, query) |
+| `incus_network` | Network CRUD |
+| `incus_network_forward` | Network forwards |
+| `incus_profile` | Profile management |
+| `incus_project` | Project management |
+| `incus_remote` | Remote management |
+| `incus_snapshot` | Snapshot management |
+| `incus_storage` | Storage pools and volumes |
 
 ## Known Limitations
 
