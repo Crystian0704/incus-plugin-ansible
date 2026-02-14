@@ -24,7 +24,9 @@ issues: https://github.com/Crystian0704/incus-plugin-ansible/issues
 
 build_ignore:
   - generate_docs.py
+  - audit_docs.py
   - tests
   - "*.tar.gz"
   - .gitignore
   - .venv
+  - requirements.txt
