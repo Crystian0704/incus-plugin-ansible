@@ -214,13 +214,19 @@ class IncusImage(object):
                 if self.remote and self.remote != 'local':
                      target_alias = "{}:{}".format(self.remote, alias)
                 
-                cmd = ['image', 'alias', 'create', target_alias, fingerprint]
-                
                 if self.module.check_mode:
                     changed = True
                     continue
                 
-                rc, out, err = self.run_incus(cmd)
+                # Check if alias exists on another image and remove it first
+                existing = self.get_image_info(target_alias)
+                if existing and existing['fingerprint'] != fingerprint:
+                    rc, out, err = self.run_incus(['image', 'alias', 'delete', target_alias])
+                    if rc != 0:
+                        self.module.fail_json(msg="Failed to remove existing alias '{}' from image {}: {}".format(
+                            alias, existing['fingerprint'][:12], err))
+                
+                rc, out, err = self.run_incus(['image', 'alias', 'create', target_alias, fingerprint])
                 if rc != 0:
                     self.module.fail_json(msg="Failed to create alias: " + err)
                 changed = True
