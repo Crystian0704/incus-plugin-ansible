@@ -31,6 +31,77 @@
     that:
       - img_copy_idemp.changed == false
 
+# ========================
+# Properties tests
+# ========================
+- name: Set properties on existing image
+  crystian.incus.incus_image:
+    alias: "test-alpine"
+    properties:
+      os: "Alpine"
+      release: "edge"
+      custom.test: "value1"
+    remote: "{{ target_remote | default(omit) }}"
+    state: present
+  register: img_props
+
+- name: Assert properties changed
+  assert:
+    that:
+      - img_props.changed == true
+
+- name: Verify properties via CLI
+  command: "incus image show {{ target_remote | default('local') }}:test-alpine"
+  register: img_show
+
+- name: Assert properties in show output
+  assert:
+    that:
+      - "'os: Alpine' in img_show.stdout"
+      - "'release: edge' in img_show.stdout"
+      - "'custom.test: value1' in img_show.stdout"
+
+- name: Idempotency properties (same values)
+  crystian.incus.incus_image:
+    alias: "test-alpine"
+    properties:
+      os: "Alpine"
+      release: "edge"
+      custom.test: "value1"
+    remote: "{{ target_remote | default(omit) }}"
+    state: present
+  register: img_props_idemp
+
+- name: Assert idempotency properties
+  assert:
+    that:
+      - img_props_idemp.changed == false
+
+- name: Update properties (declarative - removes custom.test)
+  crystian.incus.incus_image:
+    alias: "test-alpine"
+    properties:
+      os: "Alpine"
+      release: "latest"
+    remote: "{{ target_remote | default(omit) }}"
+    state: present
+  register: img_props_upd
+
+- name: Assert properties updated
+  assert:
+    that:
+      - img_props_upd.changed == true
+
+- name: Verify updated properties via CLI
+  command: "incus image show {{ target_remote | default('local') }}:test-alpine"
+  register: img_show_upd
+
+- name: Assert updated properties
+  assert:
+    that:
+      - "'release: latest' in img_show_upd.stdout"
+      - "'custom.test' not in img_show_upd.stdout"
+
 - name: Export image
   crystian.incus.incus_image:
     alias: "test-alpine"

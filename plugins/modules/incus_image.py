@@ -50,6 +50,8 @@ options:
   properties:
     description:
       - Dictionary of properties to set on the image.
+      - Uses declarative behavior - properties not listed will be removed from the image.
+      - Supports special properties like C(requirements.secureboot), C(requirements.nesting), etc.
     required: false
     type: dict
   aliases:
@@ -93,16 +95,66 @@ EXAMPLES = r'''
     alias: my-alpine
     source: images:alpine/edge
     state: present
-- name: Import image from local file
+
+- name: Copy image with properties
+  crystian.incus.incus_image:
+    alias: my-alpine
+    source: images:alpine/edge
+    properties:
+      os: Alpine
+      release: edge
+      description: "Alpine Edge image"
+    state: present
+
+- name: Copy image with auto-update and aliases
+  crystian.incus.incus_image:
+    alias: my-alpine
+    source: images:alpine/edge
+    auto_update: true
+    aliases:
+      - alpine-edge
+      - alpine-latest
+    state: present
+
+- name: Import image from local file with properties
   crystian.incus.incus_image:
     alias: custom-image
     source: /tmp/image.tar.gz
+    properties:
+      os: Debian
+      requirements.secureboot: "false"
     state: present
+
+- name: Update properties on existing image (declarative - unlisted are removed)
+  crystian.incus.incus_image:
+    alias: my-alpine
+    properties:
+      os: Alpine
+      release: latest
+    state: present
+
+- name: Set requirements properties on VM image
+  crystian.incus.incus_image:
+    alias: my-vm-image
+    properties:
+      requirements.secureboot: "false"
+      requirements.nesting: "true"
+    state: present
+
+- name: Copy image to remote server
+  crystian.incus.incus_image:
+    alias: my-alpine
+    source: images:alpine/edge
+    remote: production
+    public: true
+    state: present
+
 - name: Export image to file
   crystian.incus.incus_image:
     alias: my-alpine
     dest: /tmp/my-alpine-backup.tar.gz
     state: exported
+
 - name: Delete image
   crystian.incus.incus_image:
     alias: my-alpine
@@ -117,6 +169,10 @@ fingerprint:
   description: Fingerprint of the managed image
   returned: when available
   type: str
+properties:
+  description: Current properties of the image after changes
+  returned: when available
+  type: dict
 '''
 from ansible.module_utils.basic import AnsibleModule
 import subprocess
@@ -169,6 +225,44 @@ class IncusImage(object):
                     self.module.fail_json(msg="Failed to create alias: " + err)
                 changed = True
         return changed
+
+    def manage_properties(self, identifier, existing_properties=None):
+        if self.properties is None:
+            return False
+
+        changed = False
+        existing = existing_properties or {}
+        desired = self.properties
+
+        target_id = identifier
+        if self.remote and self.remote != 'local':
+            if ':' not in identifier:
+                target_id = "{}:{}".format(self.remote, identifier)
+
+        # Set or update properties
+        for key, value in desired.items():
+            str_value = str(value)
+            if existing.get(key) != str_value:
+                if self.module.check_mode:
+                    changed = True
+                    continue
+                rc, out, err = self.run_incus(['image', 'set-property', target_id, key, str_value])
+                if rc != 0:
+                    self.module.fail_json(msg="Failed to set property '{}': {}".format(key, err))
+                changed = True
+
+        # Remove properties not in desired (declarative)
+        for key in existing:
+            if key not in desired:
+                if self.module.check_mode:
+                    changed = True
+                    continue
+                rc, out, err = self.run_incus(['image', 'unset-property', target_id, key])
+                if rc != 0:
+                    self.module.fail_json(msg="Failed to unset property '{}': {}".format(key, err))
+                changed = True
+
+        return changed
     def get_image_info(self, identifier):
         search_term = identifier
         if self.remote and self.remote != 'local':
@@ -218,7 +312,14 @@ class IncusImage(object):
                 rc, out, err = self.run_incus(cmd_args)
                 if rc != 0:
                     self.module.fail_json(msg="Failed to import image: " + err, stdout=out, stderr=err)
-                self.module.exit_json(changed=True, msg="Image imported from file")
+                # Apply properties after import
+                new_info = self.get_image_info(target_alias)
+                if new_info:
+                    self.manage_properties(target_alias, new_info.get('properties', {}))
+                    self.manage_aliases(new_info['fingerprint'], new_info.get('aliases', []))
+                self.module.exit_json(changed=True, msg="Image imported from file",
+                                      fingerprint=new_info['fingerprint'] if new_info else None,
+                                      properties=self.properties)
             else:
                 cmd_args = ['image', 'copy', self.source]
                 target_remote = self.remote if self.remote else 'local'
@@ -233,10 +334,23 @@ class IncusImage(object):
                 rc, out, err = self.run_incus(cmd_args)
                 if rc != 0:
                     self.module.fail_json(msg="Failed to copy image: " + err, stdout=out, stderr=err)
-                self.module.exit_json(changed=True, msg="Image copied from remote")
+                # Apply properties after copy
+                new_info = self.get_image_info(target_alias)
+                if new_info:
+                    self.manage_properties(target_alias, new_info.get('properties', {}))
+                    self.manage_aliases(new_info['fingerprint'], new_info.get('aliases', []))
+                self.module.exit_json(changed=True, msg="Image copied from remote",
+                                      fingerprint=new_info['fingerprint'] if new_info else None,
+                                      properties=self.properties)
         else:
             aliases_changed = self.manage_aliases(info['fingerprint'], info.get('aliases', []))
-            self.module.exit_json(changed=aliases_changed, msg="Image already exists", fingerprint=info['fingerprint'])
+            props_changed = self.manage_properties(target_alias, info.get('properties', {}))
+            changed = aliases_changed or props_changed
+            # Re-fetch to get current state
+            current_info = self.get_image_info(target_alias) if changed else info
+            self.module.exit_json(changed=changed, msg="Image already exists",
+                                  fingerprint=info['fingerprint'],
+                                  properties=current_info.get('properties', {}) if current_info else {})
 
         if self.module.check_mode:
              self.module.exit_json(changed=True, msg="Image would be created")
@@ -244,8 +358,11 @@ class IncusImage(object):
         info = self.get_image_info(target_alias)
         if info:
              self.manage_aliases(info['fingerprint'], info.get('aliases', []))
+             self.manage_properties(target_alias, info.get('properties', {}))
         
-        self.module.exit_json(changed=True, msg="Image created")
+        self.module.exit_json(changed=True, msg="Image created",
+                              fingerprint=info['fingerprint'] if info else None,
+                              properties=info.get('properties', {}) if info else {})
     def absent(self):
         target_alias = self.alias
         if self.remote and self.remote != 'local':

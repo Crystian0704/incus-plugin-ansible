@@ -43,7 +43,7 @@ ansible-galaxy collection install crystian-incus-1.0.0.tar.gz
 | `incus_storage_volume` | Manage Incus storage volumes. |
 | `incus_profile` | Manage Incus profiles. |
 | `incus_project` | Manage Incus projects. |
-| `incus_image` | Manage Incus images. |
+| `incus_image` | Manage Incus images (copy, import, export, delete, properties). |
 | `incus_remote` | Manage Incus remotes. |
 | `incus_exec` | Execute commands in instances. |
 | `incus_file` | Manage files in instances. |
@@ -335,6 +335,47 @@ For the complete reference, see [Inventory Plugin Documentation](docs/incus_inve
     state: present
 ```
 
+### Image Management
+```yaml
+- name: Copy image with properties
+  crystian.incus.incus_image:
+    alias: my-alpine
+    source: images:alpine/edge
+    properties:
+      os: Alpine
+      release: edge
+      description: "Alpine Edge image"
+    state: present
+
+- name: Update properties (declarative - unlisted properties are removed)
+  crystian.incus.incus_image:
+    alias: my-alpine
+    properties:
+      os: Alpine
+      release: latest
+    state: present
+
+- name: Set requirements properties
+  crystian.incus.incus_image:
+    alias: my-vm-image
+    properties:
+      os: Debian
+      requirements.secureboot: "false"
+      requirements.nesting: "true"
+    state: present
+
+- name: Import image from file
+  crystian.incus.incus_image:
+    alias: custom-image
+    source: /tmp/image.tar.gz
+    state: present
+
+- name: Delete image
+  crystian.incus.incus_image:
+    alias: my-alpine
+    state: absent
+```
+
 ### Network Management
 ```yaml
 - name: Create a network
@@ -448,7 +489,7 @@ cd ~/.ansible/collections/ansible_collections/crystian/incus
 | `incus_exec` | Command execution in instances |
 | `incus_file` | File push/pull operations |
 | `incus_export` | Instance backup export |
-| `incus_image` | Image management |
+| `incus_image` | Image management and properties |
 | `incus_info` | Resource information queries |
 | `incus_list` | Instance listing with filters |
 | `incus_inventory` | Dynamic inventory (tags, groups, compose) |
