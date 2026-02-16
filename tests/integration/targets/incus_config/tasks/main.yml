@@ -178,4 +178,80 @@
     remote: "{{ target_remote | default(omit) }}"
     state: absent
     force: true
+  ignore_errors: true
+
+# === TRUST TESTS ===
+- name: Generate test certificate
+  command: openssl req -x509 -newkey rsa:4096 -keyout /tmp/key.pem -out /tmp/cert.pem -days 1 -nodes -subj "/CN=test-trust"
+  args:
+    creates: /tmp/cert.pem
+
+- name: Read certificate
+  slurp:
+    src: /tmp/cert.pem
+  register: cert_content
+
+- name: Add trust
+  crystian.incus.incus_config:
+    trust:
+      name: test-trust-client
+      cert: "{{ cert_content.content | b64decode }}"
+      type: client
+    state: present
+    remote: "{{ target_remote | default(omit) }}"
+  register: trust_add
+
+- name: Assert trust added
+  assert:
+    that:
+      - trust_add.changed == true
+
+- name: Add trust idempotent
+  crystian.incus.incus_config:
+    trust:
+      name: test-trust-client
+      cert: "{{ cert_content.content | b64decode }}"
+      type: client
+    state: present
+    remote: "{{ target_remote | default(omit) }}"
+  register: trust_add_idemp
+
+- name: Assert trust add idempotent
+  assert:
+    that:
+      - trust_add_idemp.changed == false
+
+- name: Remove trust
+  crystian.incus.incus_config:
+    trust:
+      name: test-trust-client
+    state: absent
+    remote: "{{ target_remote | default(omit) }}"
+  register: trust_remove
+
+- name: Assert trust removed
+  assert:
+    that:
+      - trust_remove.changed == true
+
+- name: Remove trust idempotent
+  crystian.incus.incus_config:
+    trust:
+      name: test-trust-client
+    state: absent
+    remote: "{{ target_remote | default(omit) }}"
+  register: trust_remove_idemp
+
+- name: Assert trust remove idempotent
+  assert:
+    that:
+      - trust_remove_idemp.changed == false
+
+- name: Cleanup certs
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /tmp/key.pem
+    - /tmp/cert.pem
 

@@ -149,6 +149,34 @@
     that:
       - img_alias_del.changed == true
 
+- name: Ensure image exists for refresh test
+  crystian.incus.incus_image:
+    alias: "test-alpine"
+    source: "images:alpine/edge"
+    remote: "{{ target_remote | default(omit) }}"
+    state: present
+
+# === REFRESH TESTS ===
+- name: Refresh image (idempotent if no update)
+  crystian.incus.incus_image:
+    alias: "test-alpine"
+    refresh: true
+    remote: "{{ target_remote | default(omit) }}"
+    state: present
+  register: img_refresh
+
+- name: Assert refresh idempotent
+  assert:
+    that:
+      - img_refresh.changed == false
+
+- name: Cleanup remote copy
+  crystian.incus.incus_image:
+    alias: "test-alpine"
+    remote: "{{ target_remote | default(omit) }}"
+    state: absent
+  ignore_errors: true
+
 - name: Import image from file
   crystian.incus.incus_image:
     alias: "test-alpine-imported"

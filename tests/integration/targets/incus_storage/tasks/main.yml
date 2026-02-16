@@ -1,10 +1,15 @@
-- name: Cleanup attached volume
-  crystian.incus.incus_storage_volume:
-    pool: "test-pool"
-    name: "test-vol-attach"
-    remote: "{{ target_remote | default(omit) }}"
+- name: Cleanup profile test (start)
+  crystian.incus.incus_profile:
+    name: prof-vol-test-2
     state: absent
-  ignore_errors: true
+    force: true
+
+- name: Cleanup volume test (start)
+  crystian.incus.incus_storage_volume:
+    pool: default
+    name: vol-prof-test-2
+    state: absent
+    force: true
 
 - name: Cleanup instance
   crystian.incus.incus_instance:
@@ -12,6 +17,22 @@
     remote: "{{ target_remote | default(omit) }}"
     state: absent
     force: true
+  ignore_errors: true
+
+- name: Cleanup block attach vm
+  crystian.incus.incus_instance:
+    name: "test-attach-vm"
+    remote: "{{ target_remote | default(omit) }}"
+    state: absent
+    force: true
+  ignore_errors: true
+
+- name: Cleanup attached volume
+  crystian.incus.incus_storage_volume:
+    pool: "test-pool"
+    name: "test-vol-attach"
+    remote: "{{ target_remote | default(omit) }}"
+    state: absent
   ignore_errors: true
 
 - name: Cleanup volume sched
@@ -28,14 +49,6 @@
     name: "test-vol-block"
     remote: "{{ target_remote | default(omit) }}"
     state: absent
-  ignore_errors: true
-
-- name: Cleanup block attach vm
-  crystian.incus.incus_instance:
-    name: "test-attach-vm"
-    remote: "{{ target_remote | default(omit) }}"
-    state: absent
-    force: true
   ignore_errors: true
   
 - name: Cleanup volume copy
@@ -291,6 +304,34 @@
     that:
       - vol_attach_idem.changed == false
 
+- name: Detach filesystem volume
+  crystian.incus.incus_storage_volume:
+    pool: "test-pool"
+    name: "test-vol-attach"
+    state: detached
+    detach_from: "test-attach-instance"
+    remote: "{{ target_remote | default(omit) }}"
+  register: vol_detach
+
+- name: Assert detach
+  assert:
+    that:
+      - vol_detach.changed == true
+
+- name: Detach volume again (idempotent)
+  crystian.incus.incus_storage_volume:
+    pool: "test-pool"
+    name: "test-vol-attach"
+    state: detached
+    detach_from: "test-attach-instance"
+    remote: "{{ target_remote | default(omit) }}"
+  register: vol_detach_idempotent
+
+- name: Assert detach idempotency
+  assert:
+    that:
+      - vol_detach_idempotent.changed == false
+
 - name: Cleanup instance
   crystian.incus.incus_instance:
     name: "test-attach-instance"
@@ -443,6 +484,38 @@
       - vol_block_attach.changed == true
   when: pool_lvm_create is succeeded
 
+- name: Detach block volume
+  crystian.incus.incus_storage_volume:
+    pool: "test-pool-lvm"
+    name: "test-vol-block"
+    state: detached
+    detach_from: "test-attach-vm"
+    remote: "{{ target_remote | default(omit) }}"
+  register: vol_block_detach
+  when: pool_lvm_create is succeeded
+
+- name: Assert block detach
+  assert:
+    that:
+      - vol_block_detach.changed == true
+  when: pool_lvm_create is succeeded
+
+- name: Detach block volume again (idempotent)
+  crystian.incus.incus_storage_volume:
+    pool: "test-pool-lvm"
+    name: "test-vol-block"
+    state: detached
+    detach_from: "test-attach-vm"
+    remote: "{{ target_remote | default(omit) }}"
+  register: vol_block_detach_idempotent
+  when: pool_lvm_create is succeeded
+
+- name: Assert detach block idempotency
+  assert:
+    that:
+      - vol_block_detach_idempotent.changed == false
+  when: pool_lvm_create is succeeded
+
 - name: Cleanup block setup
   crystian.incus.incus_instance:
     name: "test-attach-vm"
@@ -465,4 +538,87 @@
     remote: "{{ target_remote | default(omit) }}"
     state: absent
   when: pool_lvm_create is succeeded
+  ignore_errors: true
+
+# === PROFILE ATTACH TESTS ===
+- name: Create profile for volume test
+  crystian.incus.incus_profile:
+    name: prof-vol-test-2
+    state: present
+    remote: "{{ target_remote | default(omit) }}"
+
+- name: Create volume for profile test
+  crystian.incus.incus_storage_volume:
+    pool: default
+    name: vol-prof-test-2
+    state: present
+    remote: "{{ target_remote | default(omit) }}"
+
+- name: Attach volume to profile
+  crystian.incus.incus_storage_volume:
+    pool: default
+    name: vol-prof-test-2
+    attach_profile: prof-vol-test-2
+    attach_path: /mnt/vol
+    state: present
+    remote: "{{ target_remote | default(omit) }}"
+  register: vol_prof_attach
+
+- name: Assert volume attach profile
+  assert:
+    that:
+      - vol_prof_attach.changed == true
+
+- name: Attach volume profile idempotent
+  crystian.incus.incus_storage_volume:
+    pool: default
+    name: vol-prof-test-2
+    attach_profile: prof-vol-test-2
+    attach_path: /mnt/vol
+    state: present
+    remote: "{{ target_remote | default(omit) }}"
+  register: vol_prof_attach_idem
+
+- name: Assert volume attach profile idempotent
+  assert:
+    that:
+      - vol_prof_attach_idem.changed == false
+
+- name: Verify profile device
+  command: incus profile show {{ (target_remote + ':') if target_remote is defined else '' }}prof-vol-test-2
+  register: prof_show
+  changed_when: false
+
+- name: Assert device in profile
+  assert:
+    that:
+      - "'vol-prof-test-2' in prof_show.stdout"
+
+- name: Detach volume from profile
+  crystian.incus.incus_storage_volume:
+    pool: default
+    name: vol-prof-test-2
+    detach_profile: prof-vol-test-2
+    state: detached
+    remote: "{{ target_remote | default(omit) }}"
+  register: vol_prof_detach
+
+- name: Assert detach profile
+  assert:
+    that:
+      - vol_prof_detach.changed == true
+
+- name: Cleanup profile volume
+  crystian.incus.incus_storage_volume:
+    pool: default
+    name: vol-prof-test-2
+    state: absent
+    remote: "{{ target_remote | default(omit) }}"
+  ignore_errors: true
+
+- name: Cleanup profile
+  crystian.incus.incus_profile:
+    name: prof-vol-test-2
+    state: absent
+    remote: "{{ target_remote | default(omit) }}"
   ignore_errors: true

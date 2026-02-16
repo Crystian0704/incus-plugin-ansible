@@ -14,6 +14,10 @@
     - test-complex-vm
     - instance-to-delete
     - instance-running-delete
+    - test-restart
+    - test-freeze
+    - test-rebuild
+    - test-profile-inst
   ignore_errors: true
 
 - name: Test incus_instance with tags
@@ -411,3 +415,332 @@
   assert:
     that:
       - result_delete_idempotency.changed == false
+
+# === RESTART TESTS ===
+- name: Create instance for restart tests
+  crystian.incus.incus_instance:
+    name: test-restart
+    remote_image: images:alpine/edge
+    remote: "{{ target_remote | default(omit) }}"
+    started: true
+
+- name: Restart running instance
+  crystian.incus.incus_instance:
+    name: test-restart
+    remote: "{{ target_remote | default(omit) }}"
+    state: restarted
+  register: result_restart
+
+- name: Verify restart
+  assert:
+    that:
+      - result_restart.changed == true
+      - result_restart.instance.status == "Running"
+
+- name: Stop instance for restart-from-stopped test
+  crystian.incus.incus_instance:
+    name: test-restart
+    remote: "{{ target_remote | default(omit) }}"
+    started: false
+    state: present
+
+- name: Restart stopped instance (should start it)
+  crystian.incus.incus_instance:
+    name: test-restart
+    remote: "{{ target_remote | default(omit) }}"
+    state: restarted
+  register: result_restart_stopped
+
+- name: Verify restart from stopped starts it
+  assert:
+    that:
+      - result_restart_stopped.changed == true
+      - result_restart_stopped.instance.status == "Running"
+
+- name: Force restart running instance
+  crystian.incus.incus_instance:
+    name: test-restart
+    remote: "{{ target_remote | default(omit) }}"
+    state: restarted
+    force: true
+    timeout: 30
+  register: result_force_restart
+
+- name: Verify force restart
+  assert:
+    that:
+      - result_force_restart.changed == true
+
+- name: Restart non-existent instance (should fail)
+  crystian.incus.incus_instance:
+    name: non-existent-restart-test
+    remote: "{{ target_remote | default(omit) }}"
+    state: restarted
+  register: result_restart_fail
+  ignore_errors: true
+
+- name: Verify restart fail
+  assert:
+    that:
+      - result_restart_fail is failed
+      - "'not found' in result_restart_fail.msg"
+
+# === FREEZE / UNFREEZE TESTS ===
+- name: Freeze running instance
+  crystian.incus.incus_instance:
+    name: test-restart
+    remote: "{{ target_remote | default(omit) }}"
+    state: frozen
+  register: result_freeze
+
+- name: Verify freeze
+  assert:
+    that:
+      - result_freeze.changed == true
+
+- name: Freeze already frozen instance (idempotent)
+  crystian.incus.incus_instance:
+    name: test-restart
+    remote: "{{ target_remote | default(omit) }}"
+    state: frozen
+  register: result_freeze_idempotent
+
+- name: Verify freeze idempotent
+  assert:
+    that:
+      - result_freeze_idempotent.changed == false
+
+- name: Unfreeze frozen instance
+  crystian.incus.incus_instance:
+    name: test-restart
+    remote: "{{ target_remote | default(omit) }}"
+    state: unfrozen
+  register: result_unfreeze
+
+- name: Verify unfreeze
+  assert:
+    that:
+      - result_unfreeze.changed == true
+      - result_unfreeze.instance.status == "Running"
+
+- name: Unfreeze already running instance (idempotent)
+  crystian.incus.incus_instance:
+    name: test-restart
+    remote: "{{ target_remote | default(omit) }}"
+    state: unfrozen
+  register: result_unfreeze_idempotent
+
+- name: Verify unfreeze idempotent
+  assert:
+    that:
+      - result_unfreeze_idempotent.changed == false
+
+- name: Stop instance then try freeze (should fail)
+  crystian.incus.incus_instance:
+    name: test-restart
+    remote: "{{ target_remote | default(omit) }}"
+    started: false
+    state: present
+
+- name: Freeze stopped instance (should fail)
+  crystian.incus.incus_instance:
+    name: test-restart
+    remote: "{{ target_remote | default(omit) }}"
+    state: frozen
+  register: result_freeze_stopped
+  ignore_errors: true
+
+- name: Verify freeze stopped fails
+  assert:
+    that:
+      - result_freeze_stopped is failed
+      - "'must be running' in result_freeze_stopped.msg"
+
+# === REBUILD TESTS ===
+- name: Create instance for rebuild tests
+  crystian.incus.incus_instance:
+    name: test-rebuild
+    remote_image: images:alpine/edge
+    remote: "{{ target_remote | default(omit) }}"
+    started: false
+
+- name: Rebuild with new image (stopped)
+  crystian.incus.incus_instance:
+    name: test-rebuild
+    remote: "{{ target_remote | default(omit) }}"
+    state: rebuilt
+    rebuild_image: images:alpine/edge
+  register: result_rebuild
+
+- name: Verify rebuild
+  assert:
+    that:
+      - result_rebuild.changed == true
+
+- name: Start and rebuild with force
+  crystian.incus.incus_instance:
+    name: test-rebuild
+    remote: "{{ target_remote | default(omit) }}"
+    started: true
+    state: present
+
+- name: Rebuild running instance with force
+  crystian.incus.incus_instance:
+    name: test-rebuild
+    remote: "{{ target_remote | default(omit) }}"
+    state: rebuilt
+    rebuild_image: images:alpine/edge
+    force: true
+  register: result_rebuild_force
+
+- name: Verify rebuild force
+  assert:
+    that:
+      - result_rebuild_force.changed == true
+
+- name: Rebuild as empty (stopped)
+  crystian.incus.incus_instance:
+    name: test-rebuild
+    remote: "{{ target_remote | default(omit) }}"
+    started: false
+    state: present
+
+- name: Rebuild empty
+  crystian.incus.incus_instance:
+    name: test-rebuild
+    remote: "{{ target_remote | default(omit) }}"
+    state: rebuilt
+  register: result_rebuild_empty
+
+- name: Verify rebuild empty
+  assert:
+    that:
+      - result_rebuild_empty.changed == true
+
+- name: Rebuild non-existent instance (should fail)
+  crystian.incus.incus_instance:
+    name: non-existent-rebuild-test
+    remote: "{{ target_remote | default(omit) }}"
+    state: rebuilt
+    rebuild_image: images:alpine/edge
+  register: result_rebuild_fail
+  ignore_errors: true
+
+- name: Verify rebuild fail
+  assert:
+    that:
+      - result_rebuild_fail is failed
+      - "'not found' in result_rebuild_fail.msg"
+
+# === CLEANUP ===
+- name: Cleanup restart test instance
+  crystian.incus.incus_instance:
+    name: test-restart
+    remote: "{{ target_remote | default(omit) }}"
+    state: absent
+    force: true
+  ignore_errors: true
+
+- name: Cleanup rebuild test instance
+  crystian.incus.incus_instance:
+    name: test-rebuild
+    remote: "{{ target_remote | default(omit) }}"
+    state: absent
+    force: true
+  ignore_errors: true
+
+# === PROFILE TESTS ===
+- name: Create test profile
+  crystian.incus.incus_profile:
+    name: test-prof
+    config:
+      user.foo: bar
+    state: present
+    remote: "{{ target_remote | default(omit) }}"
+
+- name: Create instance with default profile
+  crystian.incus.incus_instance:
+    name: test-profile-inst
+    remote_image: images:alpine/edge
+    remote: "{{ target_remote | default(omit) }}"
+    profiles: [default]
+    state: present
+    started: false
+
+- name: Add profile to instance
+  crystian.incus.incus_instance:
+    name: test-profile-inst
+    remote: "{{ target_remote | default(omit) }}"
+    profiles: [default, test-prof]
+    state: present
+  register: result_prof_add
+
+- name: Verify profile add
+  assert:
+    that:
+      - result_prof_add.changed == true
+
+- name: Verify profile content
+  set_fact:
+    inst_info: "{{ query('crystian.incus.incus_query', '/1.0/instances/test-profile-inst', remote=(target_remote | default('local'))) | first }}"
+
+- name: Assert profile applied
+  assert:
+    that:
+      - "'test-prof' in inst_info.profiles"
+      - "'default' in inst_info.profiles"
+
+- name: Add profile idempotent
+  crystian.incus.incus_instance:
+    name: test-profile-inst
+    remote: "{{ target_remote | default(omit) }}"
+    profiles: [default, test-prof]
+    state: present
+  register: result_prof_idem
+
+- name: Verify profile idempotent
+  assert:
+    that:
+      - result_prof_idem.changed == false
+
+- name: Remove profile from instance
+  crystian.incus.incus_instance:
+    name: test-profile-inst
+    remote: "{{ target_remote | default(omit) }}"
+    profiles: [default]
+    state: present
+  register: result_prof_remove
+
+- name: Verify profile remove
+  assert:
+    that:
+      - result_prof_remove.changed == true
+
+- name: Remove all profiles (empty list)
+  crystian.incus.incus_instance:
+    name: test-profile-inst
+    remote: "{{ target_remote | default(omit) }}"
+    profiles: []
+    state: present
+  register: result_prof_empty
+
+- name: Verify profile empty
+  assert:
+    that:
+      - result_prof_empty.changed == true
+
+# Cleanup
+- name: Cleanup profile instance
+  crystian.incus.incus_instance:
+    name: test-profile-inst
+    remote: "{{ target_remote | default(omit) }}"
+    state: absent
+    force: true
+  ignore_errors: true
+
+- name: Cleanup test profile
+  crystian.incus.incus_profile:
+    name: test-prof
+    remote: "{{ target_remote | default(omit) }}"
+    state: absent
+  ignore_errors: true

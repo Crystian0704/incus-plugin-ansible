@@ -72,6 +72,12 @@ options:
     required: false
     type: bool
     default: false
+  refresh:
+    description:
+      - Whether to refresh the image from the remote source if it already exists.
+    required: false
+    type: bool
+    default: false
   remote:
     description:
       - The remote server.
@@ -190,6 +196,7 @@ class IncusImage(object):
         self.aliases = module.params['aliases']
         self.public = module.params['public']
         self.auto_update = module.params['auto_update']
+        self.refresh = module.params['refresh']
         self.remote = module.params['remote']
         self.project = module.params['project']
     def run_incus(self, args):
@@ -218,7 +225,6 @@ class IncusImage(object):
                     changed = True
                     continue
                 
-                # Check if alias exists on another image and remove it first
                 existing = self.get_image_info(target_alias)
                 if existing and existing['fingerprint'] != fingerprint:
                     rc, out, err = self.run_incus(['image', 'alias', 'delete', target_alias])
@@ -257,7 +263,6 @@ class IncusImage(object):
                     self.module.fail_json(msg="Failed to set property '{}': {}".format(key, err))
                 changed = True
 
-        # Remove properties not in desired (declarative)
         for key in existing:
             if key not in desired:
                 if self.module.check_mode:
@@ -296,10 +301,13 @@ class IncusImage(object):
         target_alias = self.alias
         if self.remote and self.remote != 'local':
              target_alias = "{}:{}".format(self.remote, self.alias)
+        
         info = self.get_image_info(target_alias)
+        
         if info and self.fingerprint:
             if not info['fingerprint'].startswith(self.fingerprint):
                  pass
+
         if not info:
             if not self.source:
                 self.module.fail_json(msg="Image '{}' not found and no 'source' provided".format(self.alias))
@@ -318,7 +326,6 @@ class IncusImage(object):
                 rc, out, err = self.run_incus(cmd_args)
                 if rc != 0:
                     self.module.fail_json(msg="Failed to import image: " + err, stdout=out, stderr=err)
-                # Apply properties after import
                 new_info = self.get_image_info(target_alias)
                 if new_info:
                     self.manage_properties(target_alias, new_info.get('properties', {}))
@@ -340,7 +347,6 @@ class IncusImage(object):
                 rc, out, err = self.run_incus(cmd_args)
                 if rc != 0:
                     self.module.fail_json(msg="Failed to copy image: " + err, stdout=out, stderr=err)
-                # Apply properties after copy
                 new_info = self.get_image_info(target_alias)
                 if new_info:
                     self.manage_properties(target_alias, new_info.get('properties', {}))
@@ -349,26 +355,33 @@ class IncusImage(object):
                                       fingerprint=new_info['fingerprint'] if new_info else None,
                                       properties=self.properties)
         else:
+            refreshed = False
+            if self.refresh:
+                 if self.module.check_mode:
+                      self.module.exit_json(changed=True, msg="Image would be refreshed")
+                 
+                 old_fp = info['fingerprint']
+                 rc, out, err = self.run_incus(['image', 'refresh', target_alias])
+                 if rc != 0:
+                      self.module.fail_json(msg="Failed to refresh image: " + err, stdout=out, stderr=err)
+                 
+                 new_info = self.get_image_info(target_alias)
+                 if new_info and new_info['fingerprint'] != old_fp:
+                      refreshed = True
+                      info = new_info
+
             aliases_changed = self.manage_aliases(info['fingerprint'], info.get('aliases', []))
             props_changed = self.manage_properties(target_alias, info.get('properties', {}))
-            changed = aliases_changed or props_changed
-            # Re-fetch to get current state
-            current_info = self.get_image_info(target_alias) if changed else info
-            self.module.exit_json(changed=changed, msg="Image already exists",
-                                  fingerprint=info['fingerprint'],
+            changed = aliases_changed or props_changed or refreshed
+            
+            if changed:
+                 current_info = self.get_image_info(target_alias)
+            else:
+                 current_info = info
+                 
+            self.module.exit_json(changed=changed, msg="Image already exists" + (" (refreshed)" if refreshed else ""),
+                                  fingerprint=current_info['fingerprint'] if current_info else None,
                                   properties=current_info.get('properties', {}) if current_info else {})
-
-        if self.module.check_mode:
-             self.module.exit_json(changed=True, msg="Image would be created")
-
-        info = self.get_image_info(target_alias)
-        if info:
-             self.manage_aliases(info['fingerprint'], info.get('aliases', []))
-             self.manage_properties(target_alias, info.get('properties', {}))
-        
-        self.module.exit_json(changed=True, msg="Image created",
-                              fingerprint=info['fingerprint'] if info else None,
-                              properties=info.get('properties', {}) if info else {})
     def absent(self):
         target_alias = self.alias
         if self.remote and self.remote != 'local':
@@ -419,6 +432,7 @@ def main():
             aliases=dict(type='list', elements='str', required=False),
             public=dict(type='bool', default=False),
             auto_update=dict(type='bool', default=False),
+            refresh=dict(type='bool', default=False),
             remote=dict(type='str', default='local', required=False),
             project=dict(type='str', default='default', required=False),
         ),

@@ -5,10 +5,10 @@ __metaclass__ = type
 DOCUMENTATION = r'''
 ---
 module: incus_instance
-short_description: Manage Incus instances (create and start)
+short_description: Manage Incus instances
 description:
-  - Create and manage Incus instances.
-  - Combines functionality of 'incus init' and 'incus launch'.
+  - Create, manage, and control Incus instances.
+  - 'Supports create, delete, start, stop, restart, freeze, and unfreeze operations.'
 version_added: "1.0.0"
 options:
   name:
@@ -39,8 +39,12 @@ options:
       - State of the instance.
       - "present: Ensure instance exists (and started/stopped based on 'started' param)."
       - "absent: Ensure instance is removed."
+      - "restarted: Restart the instance. If stopped, starts it."
+      - "frozen: Freeze (pause) a running instance."
+      - "unfrozen: Unfreeze (resume) a frozen instance."
+      - "rebuilt: Rebuild the instance root disk from a new image."
     type: str
-    choices: ['present', 'absent']
+    choices: ['present', 'absent', 'restarted', 'frozen', 'unfrozen', 'rebuilt']
     default: present
     required: false
   force:
@@ -60,6 +64,19 @@ options:
     type: bool
     required: false
     default: false
+  timeout:
+    description:
+      - Timeout in seconds for restart/stop operations.
+      - Uses Incus default if not specified.
+    type: int
+    required: false
+  rebuild_image:
+    description:
+      - Image to use when rebuilding instance (state=rebuilt).
+      - "Example: 'images:debian/12'."
+      - If not specified with state=rebuilt, rebuilds as empty.
+    type: str
+    required: false
   ephemeral:
     description:
       - Create an ephemeral instance.
@@ -159,6 +176,35 @@ EXAMPLES = r'''
       package_upgrade: true
       packages:
         - nginx
+- name: Restart an instance
+  crystian.incus.incus_instance:
+    name: my-web-server
+    state: restarted
+
+- name: Force restart an instance
+  crystian.incus.incus_instance:
+    name: my-web-server
+    state: restarted
+    force: true
+    timeout: 30
+
+- name: Freeze (pause) an instance
+  crystian.incus.incus_instance:
+    name: my-web-server
+    state: frozen
+
+- name: Unfreeze (resume) an instance
+  crystian.incus.incus_instance:
+    name: my-web-server
+    state: unfrozen
+
+- name: Rebuild instance with new image
+  crystian.incus.incus_instance:
+    name: my-web-server
+    state: rebuilt
+    rebuild_image: images:debian/13
+    force: true
+
 - name: Create a VM with cloud-init config disk
   crystian.incus.incus_instance:
     name: my-vm-server
@@ -203,8 +249,8 @@ class IncusInstance(object):
         self.target = module.params['target']
         self.description = module.params['description']
         self.empty = module.params.get('empty', False)
-        self.state = module.params['state']
-        self.force = module.params['force']
+        self.timeout = module.params.get('timeout')
+        self.rebuild_image = module.params.get('rebuild_image')
         self.project = module.params.get('project')
         self.user_data = module.params.get('cloud_init_user_data')
         self.network_config = module.params.get('cloud_init_network_config')
@@ -298,6 +344,35 @@ class IncusInstance(object):
 
     def stop_instance(self):
         cmd = [self.incus_path, 'stop', self.name]
+        if self.force:
+            cmd.append('--force')
+        if self.timeout is not None:
+            cmd.extend(['--timeout', str(self.timeout)])
+        self._run_command(cmd)
+
+    def restart_instance(self):
+        cmd = [self.incus_path, 'restart', self.name]
+        if self.force:
+            cmd.append('--force')
+        if self.timeout is not None:
+            cmd.extend(['--timeout', str(self.timeout)])
+        self._run_command(cmd)
+
+    def pause_instance(self):
+        cmd = [self.incus_path, 'pause', self.name]
+        self._run_command(cmd)
+
+    def resume_instance(self):
+        cmd = [self.incus_path, 'resume', self.name]
+        self._run_command(cmd)
+
+    def rebuild_instance(self):
+        if self.rebuild_image:
+            cmd = [self.incus_path, 'rebuild', self.rebuild_image, self.name]
+        else:
+            cmd = [self.incus_path, 'rebuild', self.name, '--empty']
+        if self.force:
+            cmd.append('--force')
         self._run_command(cmd)
 
     def delete_instance(self):
@@ -357,6 +432,23 @@ class IncusInstance(object):
                 changed = True
         return changed
 
+    def configure_profiles(self):
+        if self.profiles is None:
+            return False
+            
+        info = self.get_instance_info()
+        current_profiles = info.get('profiles', []) if info else []
+        
+        if sorted(current_profiles) != sorted(self.profiles):
+            if self.module.check_mode:
+                return True
+            
+            profiles_arg = ','.join(self.profiles)
+            cmd = [self.incus_path, 'profile', 'assign', self.name, profiles_arg]
+            self._run_command(cmd)
+            return True
+        return False
+
     def rename_instance(self):
         source = self.rename_from
         target = self.name_param
@@ -407,7 +499,9 @@ class IncusInstance(object):
             else:
                 if self.configure_config():
                     changed = True
-                self.configure_devices() 
+                self.configure_devices()
+                if self.configure_profiles():
+                    changed = True 
 
             current_status = info['status'].lower()
             
@@ -427,6 +521,60 @@ class IncusInstance(object):
             
             state_info = self.get_instance_state()
             self.module.exit_json(changed=changed, instance=info, state=state_info)
+
+        elif self.state == 'restarted':
+            if not info:
+                self.module.fail_json(msg="Instance '{}' not found, cannot restart".format(self.name_param))
+            current_status = info['status'].lower()
+            if self.module.check_mode:
+                self.module.exit_json(changed=True, msg="Instance would be restarted")
+            if current_status == 'stopped':
+                self.start_instance()
+            else:
+                self.restart_instance()
+            info = self.get_instance_info()
+            state_info = self.get_instance_state()
+            self.module.exit_json(changed=True, instance=info, state=state_info)
+
+        elif self.state == 'frozen':
+            if not info:
+                self.module.fail_json(msg="Instance '{}' not found, cannot freeze".format(self.name_param))
+            current_status = info['status'].lower()
+            if current_status == 'frozen':
+                self.module.exit_json(changed=False, msg="Instance already frozen", instance=info)
+            if current_status != 'running':
+                self.module.fail_json(msg="Instance '{}' must be running to freeze (current status: {})".format(self.name_param, current_status))
+            if self.module.check_mode:
+                self.module.exit_json(changed=True, msg="Instance would be frozen")
+            self.pause_instance()
+            info = self.get_instance_info()
+            state_info = self.get_instance_state()
+            self.module.exit_json(changed=True, instance=info, state=state_info)
+
+        elif self.state == 'unfrozen':
+            if not info:
+                self.module.fail_json(msg="Instance '{}' not found, cannot unfreeze".format(self.name_param))
+            current_status = info['status'].lower()
+            if current_status == 'running':
+                self.module.exit_json(changed=False, msg="Instance already running", instance=info)
+            if current_status != 'frozen':
+                self.module.fail_json(msg="Instance '{}' must be frozen to unfreeze (current status: {})".format(self.name_param, current_status))
+            if self.module.check_mode:
+                self.module.exit_json(changed=True, msg="Instance would be unfrozen")
+            self.resume_instance()
+            info = self.get_instance_info()
+            state_info = self.get_instance_state()
+            self.module.exit_json(changed=True, instance=info, state=state_info)
+
+        elif self.state == 'rebuilt':
+            if not info:
+                self.module.fail_json(msg="Instance '{}' not found, cannot rebuild".format(self.name_param))
+            if self.module.check_mode:
+                self.module.exit_json(changed=True, msg="Instance would be rebuilt")
+            self.rebuild_instance()
+            info = self.get_instance_info()
+            state_info = self.get_instance_state()
+            self.module.exit_json(changed=True, instance=info, state=state_info)
 def main():
     module = AnsibleModule(
         argument_spec=dict(
@@ -434,7 +582,7 @@ def main():
             remote=dict(type='str', default='local', required=False),
             remote_image=dict(type='str', required=False),
             started=dict(type='bool', default=False, required=False),
-            state=dict(type='str', choices=['present', 'absent'], default='present', required=False),
+            state=dict(type='str', choices=['present', 'absent', 'restarted', 'frozen', 'unfrozen', 'rebuilt'], default='present', required=False),
             force=dict(type='bool', default=False, required=False),
             description=dict(type='str', required=False),
             empty=dict(type='bool', default=False),
@@ -454,6 +602,8 @@ def main():
             cloud_init_disk=dict(type='bool', default=False, required=False),
             rename_from=dict(type='str', required=False),
             tags=dict(type='dict', required=False),
+            timeout=dict(type='int', required=False),
+            rebuild_image=dict(type='str', required=False),
         ),
         supports_check_mode=True,
     )

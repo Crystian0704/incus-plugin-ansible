@@ -18,6 +18,7 @@ Supports copying from remotes, importing from files, exporting to files, and del
 | `aliases` | False |  |  | List of additional aliases to assign to the image. |
 | `public` | False | False |  | Whether the image should be public. |
 | `auto_update` | False | False |  | Whether to auto-update the image (valid for remote copies). |
+| `refresh` | False | False |  | Whether to refresh the image from the remote source if it already exists. |
 | `remote` | False | local |  | The remote server. Defaults to 'local'. |
 | `project` | False | default |  | The project instance belongs to. Defaults to 'default'. |
 

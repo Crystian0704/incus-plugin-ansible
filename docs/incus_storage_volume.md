@@ -13,7 +13,7 @@ Create, update, delete, snapshot, backup, and copy/move Incus custom storage vol
 | `type` | False | filesystem | ['filesystem', 'block'] | Type of the volume (filesystem or block). Default is filesystem. |
 | `config` | False |  |  | Dictionary of configuration options for the volume. Can be used to set size, snapshots.schedule, etc. |
 | `description` | False |  |  | Description of the volume. |
-| `state` | False | present | ['present', 'absent', 'restored', 'exported', 'imported', 'copied'] | State of the volume. {'present': 'Ensure volume (and optional snapshot) exists.'} {'absent': 'Ensure volume (or snapshot) is deleted.'} {'restored': 'Restore volume from snapshot.'} {'exported': 'Export volume to file.'} {'imported': 'Import volume from file.'} {'copied': 'Copy/Move volume.'} |
+| `state` | False | present | ['present', 'absent', 'restored', 'exported', 'imported', 'copied', 'detached'] | State of the volume. {'present': 'Ensure volume (and optional snapshot) exists.'} {'absent': 'Ensure volume (or snapshot) is deleted.'} {'restored': 'Restore volume from snapshot.'} {'exported': 'Export volume to file.'} {'imported': 'Import volume from file.'} {'copied': 'Copy/Move volume.'} {'detached': 'Detach volume from an instance.'} |
 | `force` | False | False |  | Force deletion of the volume even if it is attached to instances. Only used with state=absent. |
 | `content_type` | False |  |  | Content type (iso, etc). |
 | `snapshot` | False |  |  | Name of the snapshot (for snapshot management). If provided with state=present, creates snapshot. If provided with state=absent, deletes snapshot. If provided with state=restored, restores from this snapshot. |
@@ -25,8 +25,11 @@ Create, update, delete, snapshot, backup, and copy/move Incus custom storage vol
 | `move` | False | False |  | If true, move the volume instead of copying. Used with state=copied. |
 | `target` | False |  |  | Cluster member to target for creation. |
 | `attach_to` | False |  |  | Instance name to attach the volume to. |
+| `attach_profile` | False |  |  | Profile name to attach the volume to. |
 | `attach_path` | False |  |  | Mount path within the instance (for type=filesystem). |
 | `attach_device` | False |  |  | Device name to use when attaching. Defaults to volume name. |
+| `detach_from` | False |  |  | Instance name to detach the volume from. Used with state=detached. |
+| `detach_profile` | False |  |  | Profile name to detach the volume from. Used with state=detached. |
 | `remote` | False | local |  | The remote server. Defaults to 'local'. |
 | `project` | False | default |  | The project context. Defaults to 'default'. |
 

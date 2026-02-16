@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
+
 DOCUMENTATION = r'''
 ---
 module: incus_storage_volume
@@ -50,9 +51,10 @@ options:
       - 'exported': Export volume to file.
       - 'imported': Import volume from file.
       - 'copied': Copy/Move volume.
+      - 'detached': Detach volume from an instance.
     required: false
     type: str
-    choices: [ present, absent, restored, exported, imported, copied ]
+    choices: [ present, absent, restored, exported, imported, copied, detached ]
     default: present
   force:
     description:
@@ -120,6 +122,11 @@ options:
       - Instance name to attach the volume to.
     required: false
     type: str
+  attach_profile:
+    description:
+      - Profile name to attach the volume to.
+    required: false
+    type: str
   attach_path:
     description:
       - Mount path within the instance (for type=filesystem).
@@ -129,6 +136,18 @@ options:
     description:
       - Device name to use when attaching.
       - Defaults to volume name.
+    required: false
+    type: str
+  detach_from:
+    description:
+      - Instance name to detach the volume from.
+      - Used with state=detached.
+    required: false
+    type: str
+  detach_profile:
+    description:
+      - Profile name to detach the volume from.
+      - Used with state=detached.
     required: false
     type: str
   remote:
@@ -148,6 +167,7 @@ options:
 author:
   - Crystian @Crystian0704
 '''
+
 EXAMPLES = r'''
 - name: Create a custom volume with snapshot schedule
   crystian.incus.incus_storage_volume:
@@ -170,16 +190,19 @@ EXAMPLES = r'''
     attach_to: my-instance
     attach_path: /mnt/data
 '''
+
 RETURN = r'''
 msg:
   description: Status message
   returned: always
   type: str
 '''
+
 from ansible.module_utils.basic import AnsibleModule
 import subprocess
 import json
 import os
+
 class IncusStorageVolume(object):
     def __init__(self, module):
         self.module = module
@@ -201,23 +224,31 @@ class IncusStorageVolume(object):
         self.target = module.params['target']
         self.reuse = module.params['reuse']
         self.force = module.params['force']
-        self.attach_to = module.params['attach_to']
+        self.attach_to = module.params.get('attach_to')
         self.attach_path = module.params['attach_path']
         self.attach_device = module.params['attach_device'] or self.name
+        self.detach_from = module.params.get('detach_from')
+        self.attach_profile = module.params.get('attach_profile')
+        self.detach_profile = module.params.get('detach_profile')
+
     def run_incus(self, args):
         cmd = ['incus']
         if self.project:
             cmd.extend(['--project', self.project])
         cmd.extend(args)
+        
         env = os.environ.copy()
         env['LC_ALL'] = 'C'
+        
         p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env)
         stdout, stderr = p.communicate()
         return p.returncode, stdout.decode('utf-8'), stderr.decode('utf-8')
+
     def get_volume_info(self):
         target_pool = self.pool
         if self.remote and self.remote != 'local':
             target_pool = "{}:{}".format(self.remote, self.pool)
+            
         rc, out, err = self.run_incus(['storage', 'volume', 'show', target_pool, self.name])
         if rc == 0:
             import yaml
@@ -226,63 +257,83 @@ class IncusStorageVolume(object):
             except ImportError:
                 pass
         return None
+
     def exists(self):
         return self.get_volume_info() is not None
+
     def snapshot_exists(self):
         target_pool = self.pool
         if self.remote and self.remote != 'local':
             target_pool = "{}:{}".format(self.remote, self.pool)
+        
         target_snap = "{}/{}".format(self.name, self.snapshot)
         rc, out, err = self.run_incus(['storage', 'volume', 'show', target_pool, target_snap])
         return rc == 0
+
     def create(self):
         if self.snapshot:
             if self.snapshot_exists():
                 if not self.reuse:
                     self.module.exit_json(changed=False, msg="Snapshot already exists")
+            
             target_pool = self.pool
             if self.remote and self.remote != 'local':
                 target_pool = "{}:{}".format(self.remote, self.pool)
+                
             cmd_args = ['storage', 'volume', 'snapshot', 'create', target_pool, self.name, self.snapshot]
             if self.reuse:
                 cmd_args.append('--reuse')
+                
             if self.module.check_mode:
                 self.module.exit_json(changed=True, msg="Snapshot would be created")
+                
             rc, out, err = self.run_incus(cmd_args)
             if rc != 0:
                 self.module.fail_json(msg="Failed to create snapshot: " + err, stdout=out, stderr=err)
             self.module.exit_json(changed=True, msg="Snapshot created")
+
         target_pool = self.pool
         if self.remote and self.remote != 'local':
             target_pool = "{}:{}".format(self.remote, self.pool)
+            
         cmd_args = ['storage', 'volume', 'create', target_pool, self.name]
+        
         if self.description:
              cmd_args.extend(['--description', self.description])
+        
         if self.content_type:
             cmd_args.append('--type={}'.format(self.content_type))
         elif self.type == 'block':
             cmd_args.append('--type=block')
+            
         if self.target:
             cmd_args.append('--target={}'.format(self.target))
+
         if self.config:
             for k, v in self.config.items():
                 cmd_args.append("{}={}".format(k, v))
+                
         if self.module.check_mode:
             self.module.exit_json(changed=True, msg="Storage volume would be created")
+            
         rc, out, err = self.run_incus(cmd_args)
         if rc != 0:
             self.module.fail_json(msg="Failed to create storage volume: " + err, stdout=out, stderr=err)
-        if self.attach_to:
+            
+        if self.attach_to or self.attach_profile:
             self.attach_volume()
         
         final_info = self.get_volume_info()
         self.module.exit_json(changed=True, msg="Storage volume created", volume=final_info)
+
     def update(self, current_info):
         changed = False
         msgs = []
+        
         target_pool = self.pool
         if self.remote and self.remote != 'local':
             target_pool = "{}:{}".format(self.remote, self.pool)
+            
         if self.config:
             current_config = current_info.get('config', {})
             for k, v in self.config.items():
@@ -294,33 +345,44 @@ class IncusStorageVolume(object):
                             self.module.fail_json(msg="Failed to set volume config '{}': {}".format(k, err))
                     changed = True
                     msgs.append("Updated config '{}'".format(k))
-        if self.attach_to:
+                    
+        if self.attach_to or self.attach_profile:
              is_attached = self.check_if_attached()
              if not is_attached:
                  self.attach_volume()
                  changed = True
-                 msgs.append("Attached to instance '{}'".format(self.attach_to))
+                 if self.attach_to:
+                     msgs.append("Attached to instance '{}'".format(self.attach_to))
+                 else:
+                     msgs.append("Attached to profile '{}'".format(self.attach_profile))
+
         final_info = self.get_volume_info()
         if changed:
             self.module.exit_json(changed=True, msg=", ".join(msgs), volume=final_info)
         else:
             self.module.exit_json(changed=False, msg="Storage volume matches configuration", volume=final_info)
+
     def delete(self):
         target_pool = self.pool
         if self.remote and self.remote != 'local':
             target_pool = "{}:{}".format(self.remote, self.pool)
+            
         if self.snapshot:
              if not self.snapshot_exists():
                  self.module.exit_json(changed=False, msg="Snapshot not found")
+                 
              if self.module.check_mode:
                 self.module.exit_json(changed=True, msg="Snapshot would be deleted")
+                
              rc, out, err = self.run_incus(['storage', 'volume', 'snapshot', 'delete', target_pool, self.name, self.snapshot])
              if rc != 0:
                  self.module.fail_json(msg="Failed to delete snapshot: " + err, stdout=out, stderr=err)
              self.module.exit_json(changed=True, msg="Snapshot deleted")
              self.module.exit_json(changed=True, msg="Snapshot deleted")
+
         if self.module.check_mode:
             self.module.exit_json(changed=True, msg="Storage volume would be deleted")
+            
         rc, out, err = self.run_incus(['storage', 'volume', 'delete', target_pool, self.name])
         if rc != 0:
             if not self.force and ('in use' in err.lower() or 'currently used' in err.lower() or 'attached' in err.lower()):
@@ -328,113 +390,220 @@ class IncusStorageVolume(object):
                     msg="Cannot delete volume '{}': it is attached to instances. Use force=true to override.".format(self.name),
                     stdout=out, stderr=err)
             self.module.fail_json(msg="Failed to delete storage volume: " + err, stdout=out, stderr=err)
+            
         self.module.exit_json(changed=True, msg="Storage volume deleted")
+
     def restore(self):
          if not self.snapshot:
              self.module.fail_json(msg="'snapshot' is required for state=restored")
          if not self.snapshot_exists():
              self.module.fail_json(msg="Snapshot not found")
+             
          target_pool = self.pool
          if self.remote and self.remote != 'local':
              target_pool = "{}:{}".format(self.remote, self.pool)
+             
          if self.module.check_mode:
              self.module.exit_json(changed=True, msg="Snapshot would be restored")
+             
          rc, out, err = self.run_incus(['storage', 'volume', 'snapshot', 'restore', target_pool, self.name, self.snapshot])
          if rc != 0:
              self.module.fail_json(msg="Failed to restore snapshot: " + err, stdout=out, stderr=err)
          self.module.exit_json(changed=True, msg="Snapshot restored")
+
     def export_volume(self):
         if not self.export_to:
             self.module.fail_json(msg="'export_to' is required for state=exported")
+            
         target_pool = self.pool
         if self.remote and self.remote != 'local':
             target_pool = "{}:{}".format(self.remote, self.pool)
+            
         cmd_args = ['storage', 'volume', 'export', target_pool, self.name, self.export_to]
         if self.module.check_mode:
             self.module.exit_json(changed=True, msg="Volume would be exported")
+            
         rc, out, err = self.run_incus(cmd_args)
         if rc != 0:
             self.module.fail_json(msg="Failed to export volume: " + err, stdout=out, stderr=err)
         self.module.exit_json(changed=True, msg="Volume exported")
+
     def import_volume(self):
         if not self.import_from:
             self.module.fail_json(msg="'import_from' is required for state=imported")
+            
         target_pool = self.pool
         if self.remote and self.remote != 'local':
             target_pool = "{}:{}".format(self.remote, self.pool)
+            
+        cmd_args = ['storage', 'volume', 'import', target_pool, self.import_from]
         if self.name:
             cmd_args.append(self.name)
+            
         if self.content_type:
             cmd_args.append('--type={}'.format(self.content_type))
+            
         if self.module.check_mode:
              self.module.exit_json(changed=True, msg="Volume would be imported")
+             
         rc, out, err = self.run_incus(cmd_args)
         if rc != 0:
              self.module.fail_json(msg="Failed to import volume: " + err, stdout=out, stderr=err)
+             
         if self.attach_to:
             self.attach_volume()
+            
         self.module.exit_json(changed=True, msg="Volume imported")
+
     def copy_move(self):
         if not self.target_pool:
             self.module.fail_json(msg="'target_pool' is required for state=copied (can be same as source)")
         if not self.target_volume:
             self.module.fail_json(msg="'target_volume' is required for state=copied")
+            
         op = 'move' if self.move_op else 'copy'
         source = "{}/{}".format(self.pool, self.name)
         if self.remote and self.remote != 'local':
             source = "{}:{}".format(self.remote, source)
+            
         target = "{}/{}".format(self.target_pool, self.target_volume)
         if self.remote and self.remote != 'local':
              target = "{}:{}".format(self.remote, target)
+             
         if self.module.check_mode:
              self.module.exit_json(changed=True, msg="Volume would be {}d".format(op))
+             
         cmd_args = ['storage', 'volume', op, source, target]
         if self.target:
              cmd_args.append('--target={}'.format(self.target))
+             
         rc, out, err = self.run_incus(cmd_args)
         if rc != 0:
              self.module.fail_json(msg="Failed to {} volume: {}".format(op, err), stdout=out, stderr=err)
         self.module.exit_json(changed=True, msg="Volume {}d".format(op))
-    def check_if_attached(self):
-        instance = self.attach_to
+
+    def check_if_attached(self, is_profile=False):
+        target = self.attach_to
+        if is_profile:
+            target = self.attach_profile
+            if not target and self.detach_profile:
+                target = self.detach_profile
+        
+        if is_profile:
+            target = self.attach_profile
+            if not target and self.detach_profile:
+                target = self.detach_profile
+        
+        if not target:
+            if is_profile: target = self.detach_profile
+            else: target = self.detach_from
+
         if self.remote and self.remote != 'local':
-            instance = "{}:{}".format(self.remote, instance)
-        rc, out, err = self.run_incus(['config', 'device', 'list', instance, '--format=json'])
-        if rc == 0:
-            try:
-                devices = json.loads(out)
-            except:
-                pass
-        rc, out, err = self.run_incus(['config', 'show', instance])
-        if rc == 0:
-            import yaml
-            try:
-                data = yaml.safe_load(out)
-                devices = data.get('devices', {})
-                if self.attach_device in devices:
+            target = "{}:{}".format(self.remote, target)
+
+        if is_profile:
+             cmd = ['profile', 'show', target]
+        else:
+             cmd = ['config', 'show', target]
+        
+        rc, out, err = self.run_incus(cmd)
+        if rc != 0:
+             return False
+        
+
+
+        if is_profile:
+             import yaml
+             data = yaml.safe_load(out)
+             devices = data.get('devices', {})
+        else:
+             import yaml
+             try:
+                 data = yaml.safe_load(out)
+                 devices = data.get('devices', {})
+             except:
+                 devices = {}
+
+        for dname, dcfg in devices.items():
+            if dcfg.get('source') == self.name and dcfg.get('pool') == self.pool:
+                if dcfg.get('type') == 'disk':
                     return True
-            except ImportError:
-                pass
+            if dname == self.attach_device:
+                if dcfg.get('source') == self.name and dcfg.get('pool') == self.pool:
+                     return True
         return False
+
     def attach_volume(self):
         target_pool = self.pool
         if self.remote and self.remote != 'local':
              target_pool = "{}:{}".format(self.remote, self.pool)
-        cmd_args = ['storage', 'volume', 'attach', target_pool, self.name, self.attach_to]
+        
+        target_name = self.attach_to
+        cmd_base = ['storage', 'volume', 'attach']
+        is_profile = False
+        
+        if self.attach_profile:
+            target_name = self.attach_profile
+            cmd_base = ['storage', 'volume', 'attach-profile']
+            is_profile = True
+            
+        cmd_args = cmd_base + [target_pool, self.name, target_name]
+        
         use_default_device_name = (self.attach_device == self.name)
         has_path = (self.attach_path and self.type == 'filesystem' and self.content_type != 'iso')
+        
         if not use_default_device_name or has_path:
              cmd_args.append(self.attach_device)
         if has_path:
              cmd_args.append(self.attach_path)
+
+        if self.check_if_attached(is_profile=is_profile):
+             self.module.exit_json(changed=False, msg="Volume already attached")
+
+        if self.module.check_mode:
+             self.module.exit_json(changed=True, msg="Volume would be attached")
+
         rc, out, err = self.run_incus(cmd_args)
         if rc != 0:
              self.module.fail_json(msg="Failed to attach volume: " + err + " CMD: " + " ".join(cmd_args), stdout=out, stderr=err)
+        self.module.exit_json(changed=True, msg="Volume attached")
+
+    def detach_volume(self):
+        target_pool = self.pool
+        if self.remote and self.remote != 'local':
+             target_pool = "{}:{}".format(self.remote, self.pool)
+        
+        target_name = self.detach_from
+        cmd_base = ['storage', 'volume', 'detach']
+        is_profile = False
+        
+        if self.detach_profile:
+            target_name = self.detach_profile
+            cmd_base = ['storage', 'volume', 'detach-profile']
+            is_profile = True
+
+        if not self.check_if_attached(is_profile=is_profile):
+             self.module.exit_json(changed=False, msg="Volume not attached")
+             
+        if self.module.check_mode:
+            self.module.exit_json(changed=True, msg="Volume would be detached")
+            
+        cmd_args = cmd_base + [target_pool, self.name, target_name]
+        if self.attach_device != self.name:
+            cmd_args.append(self.attach_device)
+            
+        rc, out, err = self.run_incus(cmd_args)
+        if rc != 0:
+            self.module.fail_json(msg="Failed to detach volume: " + err, stdout=out, stderr=err)
+        self.module.exit_json(changed=True, msg="Volume detached")
+
     def run(self):
         if self.state == 'imported':
              self.import_volume()
              return
+
         current_info = self.get_volume_info()
+        
         if self.state == 'present':
             if not current_info and not self.snapshot: 
                 self.create()
@@ -444,19 +613,29 @@ class IncusStorageVolume(object):
                 self.update(current_info)
             else:
                 self.module.fail_json(msg="Volume '{}' does not exist".format(self.name))
+                
         elif self.state == 'absent':
              if current_info:
                  self.delete()
              else:
                  self.module.exit_json(changed=False, msg="Volume/Snapshot not found")
+                 
         elif self.state == 'restored':
              self.restore()
+             
         elif self.state == 'exported':
              self.export_volume()
+             
         elif self.state == 'copied':
              if not current_info:
                  self.module.fail_json(msg="Source volume '{}' not found".format(self.name))
              self.copy_move()
+             
+        elif self.state == 'detached':
+             if not self.detach_from and not self.detach_profile:
+                 self.module.fail_json(msg="'detach_from' or 'detach_profile' is required for state=detached")
+             self.detach_volume()
+
 def main():
     module = AnsibleModule(
         argument_spec=dict(
@@ -466,7 +645,7 @@ def main():
             content_type=dict(type='str', required=False, choices=['filesystem', 'block', 'iso']), 
             config=dict(type='dict', required=False),
             description=dict(type='str', required=False),
-            state=dict(type='str', default='present', choices=['present', 'absent', 'restored', 'exported', 'imported', 'copied']),
+            state=dict(type='str', default='present', choices=['present', 'absent', 'restored', 'exported', 'imported', 'copied', 'detached']),
             remote=dict(type='str', default='local', required=False),
             project=dict(type='str', default='default', required=False),
             snapshot=dict(type='str', required=False),
@@ -479,12 +658,17 @@ def main():
             move=dict(type='bool', default=False),
             target=dict(type='str', required=False),
             attach_to=dict(type='str', required=False),
+            attach_profile=dict(type='str', required=False),
             attach_path=dict(type='str', required=False),
             attach_device=dict(type='str', required=False),
+            detach_from=dict(type='str', required=False),
+            detach_profile=dict(type='str', required=False),
         ),
         supports_check_mode=True,
     )
+
     manager = IncusStorageVolume(module)
     manager.run()
+
 if __name__ == '__main__':
     main()

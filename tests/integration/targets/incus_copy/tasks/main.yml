@@ -1,0 +1,149 @@
+---
+- name: Cleanup copy test instances (pre)
+  crystian.incus.incus_instance:
+    name: "{{ item }}"
+    remote: "{{ target_remote | default(omit) }}"
+    state: absent
+    force: true
+  loop:
+    - copy-source
+    - copy-dest
+    - copy-dest-only
+    - move-source
+    - move-dest
+  ignore_errors: true
+
+# === COPY TESTS ===
+- name: Create source instance for copy
+  crystian.incus.incus_instance:
+    name: copy-source
+    remote_image: images:alpine/edge
+    remote: "{{ target_remote | default(omit) }}"
+    started: false
+
+- name: Copy instance
+  crystian.incus.incus_copy:
+    source: copy-source
+    dest: copy-dest
+  register: result_copy
+
+- name: Verify copy
+  assert:
+    that:
+      - result_copy.changed == true
+      - result_copy.msg == "Instance copied"
+
+- name: Copy instance again (idempotent)
+  crystian.incus.incus_copy:
+    source: copy-source
+    dest: copy-dest
+  register: result_copy_idempotent
+
+- name: Verify copy idempotent
+  assert:
+    that:
+      - result_copy_idempotent.changed == false
+
+- name: Copy instance-only (without snapshots)
+  crystian.incus.incus_copy:
+    source: copy-source
+    dest: copy-dest-only
+    instance_only: true
+  register: result_copy_only
+
+- name: Verify copy instance-only
+  assert:
+    that:
+      - result_copy_only.changed == true
+
+- name: Copy from non-existent source (should fail)
+  crystian.incus.incus_copy:
+    source: non-existent-copy-source
+    dest: fail-copy-dest
+  register: result_copy_fail
+  ignore_errors: true
+
+- name: Verify copy fail
+  assert:
+    that:
+      - result_copy_fail is failed
+      - "'not found' in result_copy_fail.msg"
+
+# Cleanup copy dests
+- name: Cleanup copy-dest
+  crystian.incus.incus_instance:
+    name: copy-dest
+    remote: "{{ target_remote | default(omit) }}"
+    state: absent
+    force: true
+  ignore_errors: true
+
+- name: Cleanup copy-dest-only
+  crystian.incus.incus_instance:
+    name: copy-dest-only
+    remote: "{{ target_remote | default(omit) }}"
+    state: absent
+    force: true
+  ignore_errors: true
+
+# === MOVE TESTS ===
+- name: Create source instance for move
+  crystian.incus.incus_instance:
+    name: move-source
+    remote_image: images:alpine/edge
+    remote: "{{ target_remote | default(omit) }}"
+    started: false
+
+- name: Move instance
+  crystian.incus.incus_copy:
+    source: move-source
+    dest: move-dest
+    move: true
+  register: result_move
+
+- name: Verify move
+  assert:
+    that:
+      - result_move.changed == true
+      - result_move.msg == "Instance moved"
+
+- name: Move again (already moved - idempotent)
+  crystian.incus.incus_copy:
+    source: move-source
+    dest: move-dest
+    move: true
+  register: result_move_idempotent
+
+- name: Verify move idempotent
+  assert:
+    that:
+      - result_move_idempotent.changed == false
+
+- name: Move non-existent source without existing dest (should fail)
+  crystian.incus.incus_copy:
+    source: non-existent-move-source
+    dest: non-existent-move-dest
+    move: true
+  register: result_move_fail
+  ignore_errors: true
+
+- name: Verify move fail
+  assert:
+    that:
+      - result_move_fail is failed
+      - "'not found' in result_move_fail.msg"
+
+# === CLEANUP ===
+- name: Cleanup copy test instances
+  crystian.incus.incus_instance:
+    name: "{{ item }}"
+    remote: "{{ target_remote | default(omit) }}"
+    state: absent
+    force: true
+  loop:
+    - copy-source
+    - copy-dest
+    - copy-dest-only
+    - move-source
+    - move-dest
+  ignore_errors: true
