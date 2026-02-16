@@ -16,6 +16,7 @@ Create, update, delete, snapshot, backup, and copy/move Incus custom storage vol
 | `state` | False | present | ['present', 'absent', 'restored', 'exported', 'imported', 'copied'] | State of the volume. {'present': 'Ensure volume (and optional snapshot) exists.'} {'absent': 'Ensure volume (or snapshot) is deleted.'} {'restored': 'Restore volume from snapshot.'} {'exported': 'Export volume to file.'} {'imported': 'Import volume from file.'} {'copied': 'Copy/Move volume.'} |
 | `content_type` | False |  |  | Content type (iso, etc). |
 | `snapshot` | False |  |  | Name of the snapshot (for snapshot management). If provided with state=present, creates snapshot. If provided with state=absent, deletes snapshot. If provided with state=restored, restores from this snapshot. |
+| `reuse` | False | False |  | If the snapshot name already exists, delete and recreate it. Only used when creating snapshots (state=present with snapshot). |
 | `export_to` | False |  |  | Path to export the volume to (file path). Used with state=exported. |
 | `import_from` | False |  |  | Path to import the volume from (file path). Used with state=imported. |
 | `target_pool` | False |  |  | Target storage pool for copy/move operations. |

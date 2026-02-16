@@ -145,6 +145,36 @@
     that:
       - snap_create.changed == true
 
+- name: Create snapshot again (idempotency)
+  crystian.incus.incus_storage_volume:
+    pool: "test-pool"
+    name: "test-vol-sched"
+    snapshot: "snap0"
+    remote: "{{ target_remote | default(omit) }}"
+    state: present
+  register: snap_idem
+
+- name: Assert snapshot idempotency
+  assert:
+    that:
+      - snap_idem.changed == false
+      - "'already exists' in snap_idem.msg"
+
+- name: Reuse snapshot (overwrite)
+  crystian.incus.incus_storage_volume:
+    pool: "test-pool"
+    name: "test-vol-sched"
+    snapshot: "snap0"
+    reuse: true
+    remote: "{{ target_remote | default(omit) }}"
+    state: present
+  register: snap_reuse
+
+- name: Assert snapshot reuse
+  assert:
+    that:
+      - snap_reuse.changed == true
+
 - name: Restore snapshot
   crystian.incus.incus_storage_volume:
     pool: "test-pool"

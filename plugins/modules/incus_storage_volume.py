@@ -67,6 +67,13 @@ options:
       - If provided with state=restored, restores from this snapshot.
     required: false
     type: str
+  reuse:
+    description:
+      - If the snapshot name already exists, delete and recreate it.
+      - Only used when creating snapshots (state=present with snapshot).
+    required: false
+    type: bool
+    default: false
   export_to:
     description:
       - Path to export the volume to (file path).
@@ -185,6 +192,7 @@ class IncusStorageVolume(object):
         self.target_volume = module.params['target_volume']
         self.move_op = module.params['move']
         self.target = module.params['target']
+        self.reuse = module.params['reuse']
         self.attach_to = module.params['attach_to']
         self.attach_path = module.params['attach_path']
         self.attach_device = module.params['attach_device'] or self.name
@@ -222,11 +230,14 @@ class IncusStorageVolume(object):
     def create(self):
         if self.snapshot:
             if self.snapshot_exists():
-                self.module.exit_json(changed=False, msg="Snapshot already exists")
+                if not self.reuse:
+                    self.module.exit_json(changed=False, msg="Snapshot already exists")
             target_pool = self.pool
             if self.remote and self.remote != 'local':
                 target_pool = "{}:{}".format(self.remote, self.pool)
             cmd_args = ['storage', 'volume', 'snapshot', 'create', target_pool, self.name, self.snapshot]
+            if self.reuse:
+                cmd_args.append('--reuse')
             if self.module.check_mode:
                 self.module.exit_json(changed=True, msg="Snapshot would be created")
             rc, out, err = self.run_incus(cmd_args)
@@ -447,6 +458,7 @@ def main():
             remote=dict(type='str', default='local', required=False),
             project=dict(type='str', default='default', required=False),
             snapshot=dict(type='str', required=False),
+            reuse=dict(type='bool', default=False),
             export_to=dict(type='str', required=False),
             import_from=dict(type='str', required=False),
             target_pool=dict(type='str', required=False),
