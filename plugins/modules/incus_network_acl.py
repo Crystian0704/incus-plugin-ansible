@@ -46,6 +46,13 @@ options:
       - Dictionary of configuration options.
     required: false
     type: dict
+  force:
+    description:
+      - Force deletion of the ACL even if it is referenced by networks.
+      - Only used with state=absent.
+    required: false
+    type: bool
+    default: false
   project:
     description:
       - The project context.
@@ -108,6 +115,7 @@ class IncusNetworkACL(object):
         self.egress = module.params['egress']
         self.ingress = module.params['ingress']
         self.config = module.params['config']
+        self.force = module.params['force']
         self.project = module.params['project']
         self.remote = module.params['remote']
 
@@ -212,6 +220,10 @@ class IncusNetworkACL(object):
         cmd = ['network', 'acl', 'delete', self.get_target_name()]
         rc, out, err = self.run_incus(cmd, check_rc=False)
         if rc != 0:
+             if not self.force and ('in use' in err.lower() or 'currently used' in err.lower() or 'referenced' in err.lower()):
+                 self.module.fail_json(
+                     msg="Cannot delete ACL '{}': it is referenced by networks. Use force=true to override.".format(self.name),
+                     stdout=out, stderr=err)
              self.module.fail_json(msg="Failed to delete ACL: " + err, stdout=out, stderr=err)
         
         self.module.exit_json(changed=True, msg="ACL deleted")
@@ -231,6 +243,7 @@ def main():
             egress=dict(type='list', elements='dict', required=False),
             ingress=dict(type='list', elements='dict', required=False),
             config=dict(type='dict', required=False),
+            force=dict(type='bool', default=False),
             project=dict(type='str', default='default', required=False),
             remote=dict(type='str', default='local', required=False),
         ),

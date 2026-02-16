@@ -41,6 +41,13 @@ options:
       - "Dictionary of configuration options (e.g., 'ipv4.address': '10.0.0.1/24')."
     required: false
     type: dict
+  force:
+    description:
+      - Force deletion of the network even if instances are using it.
+      - Only used with state=absent.
+    required: false
+    type: bool
+    default: false
   project:
     description:
       - The project context.
@@ -102,6 +109,7 @@ class IncusNetwork(object):
         self.type = module.params['type']
         self.description = module.params['description']
         self.config = module.params['config']
+        self.force = module.params['force']
         self.project = module.params['project']
         self.target = module.params['target']
         self.remote = module.params['remote']
@@ -266,6 +274,10 @@ class IncusNetwork(object):
 
         rc, out, err = self.run_incus(cmd, check_rc=False)
         if rc != 0:
+             if not self.force and ('in use' in err.lower() or 'currently used' in err.lower()):
+                 self.module.fail_json(
+                     msg="Cannot delete network '{}': it is in use by instances. Use force=true to override.".format(self.name),
+                     stdout=out, stderr=err)
              self.module.fail_json(msg="Failed to delete network: " + err, stdout=out, stderr=err)
         
         self.module.exit_json(changed=True, msg="Network deleted")
@@ -290,6 +302,7 @@ def main():
             type=dict(type='str', default='bridge', required=False),
             description=dict(type='str', required=False),
             config=dict(type='dict', required=False),
+            force=dict(type='bool', default=False),
             project=dict(type='str', default='default', required=False),
             target=dict(type='str', required=False),
             remote=dict(type='str', default='local', required=False),

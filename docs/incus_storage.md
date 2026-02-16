@@ -13,6 +13,7 @@ Create, update, and delete Incus storage pools.
 | `config` | False |  |  | Dictionary of configuration options for the storage pool. |
 | `description` | False |  |  | Description of the storage pool. |
 | `state` | False | present | ['present', 'absent'] | State of the storage pool. {'present': 'Ensure pool exists and matches configuration.'} {'absent': 'Ensure pool is deleted.'} |
+| `force` | False | False |  | Force deletion of the storage pool even if volumes or instances are using it. Only used with state=absent. |
 | `remote` | False | local |  | The remote server. Defaults to 'local'. |
 | `project` | False | default |  | The project context. Defaults to 'default'. |
 

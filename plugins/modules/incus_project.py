@@ -41,6 +41,14 @@ options:
     type: str
     choices: [ present, absent ]
     default: present
+  force:
+    description:
+      - Force deletion of the project and everything it contains.
+      - This will delete all instances, images, volumes, etc. within the project.
+      - Only used with state=absent.
+    required: false
+    type: bool
+    default: false
   rename_from:
     description:
       - If provided, rename the specified project to 'name'.
@@ -92,6 +100,7 @@ class IncusProject(object):
         self.description = module.params['description']
         self.config = module.params['config']
         self.state = module.params['state']
+        self.force = module.params['force']
         self.rename_from = module.params['rename_from']
         self.remote = module.params['remote']
     def run_incus(self, args, check_rc=True):
@@ -187,8 +196,15 @@ class IncusProject(object):
             target = "{}:{}".format(self.remote, self.name)
         if self.module.check_mode:
              self.module.exit_json(changed=True, msg="Project would be deleted")
-        rc, out, err = self.run_incus(['project', 'delete', target], check_rc=False)
+        cmd = ['project', 'delete', target]
+        if self.force:
+            cmd.append('--force')
+        rc, out, err = self.run_incus(cmd, check_rc=False)
         if rc != 0:
+             if not self.force and ('in use' in err.lower() or 'not empty' in err.lower()):
+                 self.module.fail_json(
+                     msg="Cannot delete project '{}': it contains resources. Use force=true to delete everything.".format(self.name),
+                     stdout=out, stderr=err)
              self.module.fail_json(msg="Failed to delete project: " + err, stdout=out, stderr=err)
         self.module.exit_json(changed=True, msg="Project deleted")
     def rename(self):
@@ -234,6 +250,7 @@ def main():
             config=dict(type='dict', required=False),
             source=dict(type='path', required=False),
             state=dict(type='str', default='present', choices=['present', 'absent']),
+            force=dict(type='bool', default=False),
             rename_from=dict(type='str', required=False),
             remote=dict(type='str', default='local', required=False),
         ),

@@ -44,6 +44,14 @@ options:
       - If provided, and appropriate, rename an existing profile to 'name'.
     required: false
     type: str
+  force:
+    description:
+      - Force deletion of the profile even if instances are using it.
+      - When true, the profile will be removed from all instances before deletion.
+      - Only used with state=absent.
+    required: false
+    type: bool
+    default: false
   remote:
     description:
       - The remote server.
@@ -105,6 +113,7 @@ class IncusProfile(object):
         self.devices = module.params['devices']
         self.state = module.params['state']
         self.rename_from = module.params['rename_from']
+        self.force = module.params['force']
         self.remote = module.params['remote']
         self.project = module.params['project']
     def load_source(self):
@@ -241,6 +250,10 @@ class IncusProfile(object):
              
         rc, out, err = self.run_incus(['profile', 'delete', target], check_rc=False)
         if rc != 0:
+             if not self.force and ('in use' in err.lower() or 'currently used' in err.lower() or 'still in use' in err.lower()):
+                 self.module.fail_json(
+                     msg="Cannot delete profile '{}': it is in use by instances. Use force=true to override.".format(self.name),
+                     stdout=out, stderr=err)
              self.module.fail_json(msg="Failed to delete profile: " + err, stdout=out, stderr=err)
         self.module.exit_json(changed=True, msg="Profile deleted")
 
@@ -281,6 +294,7 @@ def main():
             devices=dict(type='dict', required=False),
             state=dict(type='str', default='present', choices=['present', 'absent']),
             rename_from=dict(type='str', required=False),
+            force=dict(type='bool', default=False),
             remote=dict(type='str', default='local', required=False),
             project=dict(type='str', default='default', required=False),
         ),

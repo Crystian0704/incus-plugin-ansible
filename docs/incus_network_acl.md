@@ -14,6 +14,7 @@ Manage Incus network ACLs (create, delete, configure).
 | `egress` | False |  |  | List of egress rules. |
 | `ingress` | False |  |  | List of ingress rules. |
 | `config` | False |  |  | Dictionary of configuration options. |
+| `force` | False | False |  | Force deletion of the ACL even if it is referenced by networks. Only used with state=absent. |
 | `project` | False | default |  | The project context. Defaults to 'default'. |
 | `remote` | False | local |  | Remote Incus server. Defaults to 'local'. |
 

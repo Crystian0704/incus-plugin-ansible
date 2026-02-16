@@ -14,6 +14,7 @@ configure limits, features, and restrictions.
 | `config` | False |  |  | Dictionary of configuration options (e.g., 'features.images': 'false'). Handles limits, restrictions, and features. |
 | `source` | False |  |  | Path to a YAML file containing project definition. |
 | `state` | False | present | ['present', 'absent'] | State of the project. {'present': 'Ensure project exists and matches config.'} {'absent': 'Ensure project is deleted.'} |
+| `force` | False | False |  | Force deletion of the project and everything it contains. This will delete all instances, images, volumes, etc. within the project. Only used with state=absent. |
 | `rename_from` | False |  |  | If provided, rename the specified project to 'name'. |
 | `remote` | False | local |  | The remote server. Defaults to 'local'. |
 

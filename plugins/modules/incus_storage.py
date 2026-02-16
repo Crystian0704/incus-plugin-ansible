@@ -41,6 +41,13 @@ options:
     type: str
     choices: [ present, absent ]
     default: present
+  force:
+    description:
+      - Force deletion of the storage pool even if volumes or instances are using it.
+      - Only used with state=absent.
+    required: false
+    type: bool
+    default: false
   remote:
     description:
       - The remote server.
@@ -99,6 +106,7 @@ class IncusStorage(object):
         self.config = module.params['config']
         self.description = module.params['description']
         self.state = module.params['state']
+        self.force = module.params['force']
         self.remote = module.params['remote']
         self.project = module.params['project']
     def run_incus(self, args):
@@ -171,6 +179,10 @@ class IncusStorage(object):
             self.module.exit_json(changed=True, msg="Storage pool would be deleted")
         rc, out, err = self.run_incus(['storage', 'delete', target])
         if rc != 0:
+            if not self.force and ('in use' in err.lower() or 'currently used' in err.lower() or 'not empty' in err.lower()):
+                self.module.fail_json(
+                    msg="Cannot delete storage pool '{}': it has volumes or instances using it. Use force=true to override.".format(self.name),
+                    stdout=out, stderr=err)
             self.module.fail_json(msg="Failed to delete storage pool: " + err, stdout=out, stderr=err)
         self.module.exit_json(changed=True, msg="Storage pool deleted")
     def run(self):
@@ -195,6 +207,7 @@ def main():
             config=dict(type='dict', required=False),
             description=dict(type='str', required=False),
             state=dict(type='str', default='present', choices=['present', 'absent']),
+            force=dict(type='bool', default=False),
             remote=dict(type='str', default='local', required=False),
             project=dict(type='str', default='default', required=False),
         ),

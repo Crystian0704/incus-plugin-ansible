@@ -14,6 +14,7 @@ Create, update, and delete Incus configuration profiles.
 | `devices` | False |  |  | Dictionary of devices. |
 | `state` | False | present | ['present', 'absent'] | State of the profile. {'present': 'Ensure profile exists and matches config.'} {'absent': 'Ensure profile is deleted.'} |
 | `rename_from` | False |  |  | If provided, and appropriate, rename an existing profile to 'name'. |
+| `force` | False | False |  | Force deletion of the profile even if instances are using it. When true, the profile will be removed from all instances before deletion. Only used with state=absent. |
 | `remote` | False | local |  | The remote server. Defaults to 'local'. |
 | `project` | False | default |  | The project context. Defaults to 'default'. |
 

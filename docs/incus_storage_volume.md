@@ -14,6 +14,7 @@ Create, update, delete, snapshot, backup, and copy/move Incus custom storage vol
 | `config` | False |  |  | Dictionary of configuration options for the volume. Can be used to set size, snapshots.schedule, etc. |
 | `description` | False |  |  | Description of the volume. |
 | `state` | False | present | ['present', 'absent', 'restored', 'exported', 'imported', 'copied'] | State of the volume. {'present': 'Ensure volume (and optional snapshot) exists.'} {'absent': 'Ensure volume (or snapshot) is deleted.'} {'restored': 'Restore volume from snapshot.'} {'exported': 'Export volume to file.'} {'imported': 'Import volume from file.'} {'copied': 'Copy/Move volume.'} |
+| `force` | False | False |  | Force deletion of the volume even if it is attached to instances. Only used with state=absent. |
 | `content_type` | False |  |  | Content type (iso, etc). |
 | `snapshot` | False |  |  | Name of the snapshot (for snapshot management). If provided with state=present, creates snapshot. If provided with state=absent, deletes snapshot. If provided with state=restored, restores from this snapshot. |
 | `reuse` | False | False |  | If the snapshot name already exists, delete and recreate it. Only used when creating snapshots (state=present with snapshot). |

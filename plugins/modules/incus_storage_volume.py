@@ -54,6 +54,13 @@ options:
     type: str
     choices: [ present, absent, restored, exported, imported, copied ]
     default: present
+  force:
+    description:
+      - Force deletion of the volume even if it is attached to instances.
+      - Only used with state=absent.
+    required: false
+    type: bool
+    default: false
   content_type:
     description:
       - Content type (iso, etc).
@@ -193,6 +200,7 @@ class IncusStorageVolume(object):
         self.move_op = module.params['move']
         self.target = module.params['target']
         self.reuse = module.params['reuse']
+        self.force = module.params['force']
         self.attach_to = module.params['attach_to']
         self.attach_path = module.params['attach_path']
         self.attach_device = module.params['attach_device'] or self.name
@@ -315,6 +323,10 @@ class IncusStorageVolume(object):
             self.module.exit_json(changed=True, msg="Storage volume would be deleted")
         rc, out, err = self.run_incus(['storage', 'volume', 'delete', target_pool, self.name])
         if rc != 0:
+            if not self.force and ('in use' in err.lower() or 'currently used' in err.lower() or 'attached' in err.lower()):
+                self.module.fail_json(
+                    msg="Cannot delete volume '{}': it is attached to instances. Use force=true to override.".format(self.name),
+                    stdout=out, stderr=err)
             self.module.fail_json(msg="Failed to delete storage volume: " + err, stdout=out, stderr=err)
         self.module.exit_json(changed=True, msg="Storage volume deleted")
     def restore(self):
@@ -459,6 +471,7 @@ def main():
             project=dict(type='str', default='default', required=False),
             snapshot=dict(type='str', required=False),
             reuse=dict(type='bool', default=False),
+            force=dict(type='bool', default=False),
             export_to=dict(type='str', required=False),
             import_from=dict(type='str', required=False),
             target_pool=dict(type='str', required=False),

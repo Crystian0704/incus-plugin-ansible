@@ -13,6 +13,7 @@ Manage Incus networks (create, delete, configure).
 | `type` | False | bridge |  | Type of the network (e.g., 'bridge', 'ovn', 'macvlan', 'sriov'). Only used during creation. |
 | `description` | False |  |  | Description of the network. |
 | `config` | False |  |  | Dictionary of configuration options (e.g., 'ipv4.address': '10.0.0.1/24'). |
+| `force` | False | False |  | Force deletion of the network even if instances are using it. Only used with state=absent. |
 | `project` | False | default |  | The project context. Defaults to 'default'. |
 | `target` | False |  |  | Cluster member target. |
 
