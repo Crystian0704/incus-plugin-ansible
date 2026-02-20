@@ -16,6 +16,7 @@ Manage Incus networks (create, delete, configure).
 | `force` | False | False |  | Force deletion of the network even if instances are using it. Only used with state=absent. |
 | `project` | False | default |  | The project context. Defaults to 'default'. |
 | `target` | False |  |  | Cluster member target. |
+| `remote` | False | local |  | The remote server. Defaults to 'local'. |
 
 ## Examples
 

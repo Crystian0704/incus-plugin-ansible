@@ -9,6 +9,7 @@ Create, update, and delete Incus configuration profiles.
 | Parameter | Required | Default | Choices | Description |
 |---|---|---|---|---|
 | `name` | True |  |  | Name of the profile. |
+| `source` | False |  |  | Path to a YAML file containing profile configuration. If provided, the profile is created/updated from this file. |
 | `description` | False |  |  | Description of the profile. |
 | `config` | False |  |  | Dictionary of configuration options (e.g., 'limits.cpu': '2'). |
 | `devices` | False |  |  | Dictionary of devices. |

@@ -250,6 +250,20 @@ class IncusConfig(object):
         except Exception as e:
             self.module.fail_json(msg="Failed to parse trust list JSON: %s" % str(e))
 
+    def get_trust_tokens(self):
+        cmd = [self.incus_path, 'config', 'trust', 'list-tokens', '--format=json']
+        if self.remote:
+             cmd.append("{}:".format(self.remote))
+        
+        rc, out, err = self._run_command(cmd, check_rc=False)
+        if rc != 0:
+             self.module.fail_json(msg="Failed to get trust tokens", cmd=cmd, rc=rc, stdout=out, stderr=err)
+        
+        try:
+            return json.loads(out)
+        except Exception as e:
+            self.module.fail_json(msg="Failed to parse trust tokens JSON: %s" % str(e))
+
     def process_trust(self):
         changed = False
         token = None
@@ -261,10 +275,13 @@ class IncusConfig(object):
              self.module.fail_json(msg="Trust config requires 'name'")
         
         current_trust = self.get_trust_list()
-        exists = any(t.get('name') == trust_name for t in current_trust)
+        current_tokens = self.get_trust_tokens()
+        
+        exists_cert = any(t.get('name') == trust_name for t in current_trust)
+        exists_token = any(t.get('client_name') == trust_name for t in current_tokens)
         
         if self.state == 'present':
-            if not exists:
+            if not exists_cert and not exists_token:
                 if self.module.check_mode:
                     pass
                 else:
@@ -299,12 +316,10 @@ class IncusConfig(object):
                         token = out.strip()
                 changed = True
         elif self.state == 'absent':
-             if exists:
+             if exists_cert:
                 fingerprint = next((t.get('fingerprint') for t in current_trust if t.get('name') == trust_name), None)
                 if fingerprint:
-                    if self.module.check_mode:
-                        pass
-                    else:
+                    if not self.module.check_mode:
                         target = fingerprint
                         if self.remote:
                             target = "{}:{}".format(self.remote, fingerprint)
@@ -312,6 +327,16 @@ class IncusConfig(object):
                         cmd = [self.incus_path, 'config', 'trust', 'remove', target, '--quiet']
                         self._run_command(cmd)
                     changed = True
+
+             if exists_token:
+                if not self.module.check_mode:
+                    target = trust_name
+                    if self.remote:
+                        target = "{}:{}".format(self.remote, trust_name)
+                    
+                    cmd = [self.incus_path, 'config', 'trust', 'revoke-token', target, '--quiet']
+                    self._run_command(cmd)
+                changed = True
 
         return changed, token
 

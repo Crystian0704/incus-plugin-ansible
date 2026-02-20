@@ -18,7 +18,8 @@ Designed to follow Ansible's `copy`, `fetch`, and `file` nomenclature.
 | `group` | False |  |  | Group name or ID for the pushed file. If a name is provided, it is resolved inside the instance. |
 | `mode` | False |  |  | File permissions for the pushed file (e.g. '0644'). |
 | `remote` | False | local |  | The remote server. Defaults to 'local'. |
-| `project` | False | default |  | The project the instance belongs to. Defaults to 'default'. |
+| `project` | False |  |  | The project the instance belongs to. Defaults to 'default'. |
+| `recursive` | False | False |  | If true, push/pull directories recursively. |
 
 ## Examples
 

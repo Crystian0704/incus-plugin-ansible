@@ -1,0 +1,76 @@
+[WARNING]: No inventory was parsed, only implicit localhost is available
+[WARNING]: provided hosts list is empty, only localhost is available. Note that the implicit localhost does not match 'all'
+[WARNING]: Found duplicate mapping key 'state'.
+Origin: /home/usuarios/projetos/crystian/incus-plugin-ansible/tests/infra/setup.yml:200:13
+
+198             update_cache: yes
+199
+200             state: present
+                ^ column 13
+
+Using last defined value only.
+
+[WARNING]: Found duplicate mapping key 'update_cache'.
+Origin: /home/usuarios/projetos/crystian/incus-plugin-ansible/tests/infra/setup.yml:201:13
+
+199
+200             state: present
+201             update_cache: yes
+                ^ column 13
+
+Using last defined value only.
+
+
+PLAY [Provision Test Infrastructure (Localhost)] *******************************
+
+TASK [Check for existing snapshot] *********************************************
+ok: [localhost]
+
+TASK [Set Setup Strategy] ******************************************************
+ok: [localhost]
+
+TASK [Remove VM] ***************************************************************
+changed: [localhost]
+
+TASK [Remove Remote] ***********************************************************
+ok: [localhost]
+
+TASK [Restore base-setup snapshot] *********************************************
+skipping: [localhost]
+
+TASK [Ensure VM is started (Restored)] *****************************************
+skipping: [localhost]
+
+TASK [Create Test VM (Debian 13)] **********************************************
+changed: [localhost]
+
+TASK [Restart VM to apply config (Secure Boot)] ********************************
+changed: [localhost]
+
+TASK [Wait for VM Agent] *******************************************************
+FAILED - RETRYING: [localhost]: Wait for VM Agent (60 retries left).
+FAILED - RETRYING: [localhost]: Wait for VM Agent (59 retries left).
+FAILED - RETRYING: [localhost]: Wait for VM Agent (58 retries left).
+FAILED - RETRYING: [localhost]: Wait for VM Agent (57 retries left).
+FAILED - RETRYING: [localhost]: Wait for VM Agent (56 retries left).
+ok: [localhost]
+
+TASK [Get VM IP] ***************************************************************
+ok: [localhost]
+
+TASK [Add host to inventory] ***************************************************
+changed: [localhost]
+
+PLAY [Configure Test Infrastructure (VM Inside)] *******************************
+
+TASK [Install Python (raw)] ****************************************************
+[WARNING]: Deprecation warnings can be disabled by setting `deprecation_warnings=False` in ansible.cfg.
+[DEPRECATION WARNING]: Importing 'to_bytes' from 'ansible.module_utils._text' is deprecated. This feature will be removed from ansible-core version 2.24. Use ansible.module_utils.common.text.converters instead.
+[DEPRECATION WARNING]: Importing 'to_text' from 'ansible.module_utils._text' is deprecated. This feature will be removed from ansible-core version 2.24. Use ansible.module_utils.common.text.converters instead.
+ok: [test-infra-vm]
+
+TASK [Gather Facts] ************************************************************
+[WARNING]: Host 'test-infra-vm' is using the discovered Python interpreter at '/usr/bin/python3.13', but future installation of another Python interpreter could cause a different interpreter to be discovered. See https://docs.ansible.com/ansible-core/2.20/reference_appendices/interpreter_discovery.html for more information.
+ok: [test-infra-vm]
+
+TASK [Install Kernel and ZFS dependencies] *************************************

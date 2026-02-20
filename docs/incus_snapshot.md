@@ -17,6 +17,10 @@ Create, delete, restore, or rename snapshots of Incus instances.
 | `stateful` | False | False |  | Whether to include running state in the snapshot (for VMs) or restore state. Used with state='present' or state='restored'. |
 | `remote` | False | local |  | The remote server. Defaults to 'local'. |
 | `project` | False | default |  | The project the instance belongs to. Defaults to 'default'. |
+| `cron` | False |  |  | Cron expression for automatic snapshot scheduling (e.g. '@daily'). Sets 'snapshots.schedule'. |
+| `cron_stopped` | False |  |  | Whether to take snapshots even if the instance is stopped. Sets 'snapshots.schedule.stopped'. |
+| `pattern` | False |  |  | Naming pattern for automatic snapshots (e.g. 'snap-%d'). Sets 'snapshots.pattern'. |
+| `expiry` | False |  |  | Expiry expression for automatic snapshots (e.g. '30d'). Sets 'snapshots.expiry'. |
 
 ## Examples
 

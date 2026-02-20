@@ -9,18 +9,15 @@
     image_name: "images:debian/13"
 
   tasks:
-    # -------------------------------------------------------------------------
-    # 1. Determine Strategy (Restore vs Rebuild)
-    # -------------------------------------------------------------------------
+
     - name: Check for existing snapshot
       crystian.incus.incus_info:
         name: "{{ vm_name }}"
       register: vm_info
+      ignore_errors: true
 
     - name: Set Setup Strategy
       set_fact:
-        # Restore if: snapshot exists AND NOT force_cleanup AND NOT force_restore
-        # Rebuild if: force_cleanup OR force_restore OR snapshot missing
         do_restore: >-
           {{
             (force_restore | default(false) | bool) or
@@ -31,9 +28,6 @@
             )
           }}
 
-    # -------------------------------------------------------------------------
-    # 2. Cleanup (If Rebuilding)
-    # -------------------------------------------------------------------------
     - name: Cleanup previous infra (Force Cleanup or Rebuild)
       block:
         - name: Remove VM
@@ -51,10 +45,6 @@
           ignore_errors: true
 
 
-
-    # -------------------------------------------------------------------------
-    # 3. Restore (If Restoring)
-    # -------------------------------------------------------------------------
     - name: Restore base-setup snapshot
       crystian.incus.incus_snapshot:
         instance_name: "{{ vm_name }}"
@@ -70,9 +60,6 @@
         started: true
       when: do_restore
 
-    # -------------------------------------------------------------------------
-    # 4. Create VM (If Rebuilding)
-    # -------------------------------------------------------------------------
     - name: Create Test VM (Debian 13)
       crystian.incus.incus_instance:
         name: "{{ vm_name }}"
@@ -96,9 +83,6 @@
         - not do_restore
         - create_vm.changed
 
-    # -------------------------------------------------------------------------
-    # 5. Wait for Connectivity
-    # -------------------------------------------------------------------------
     - name: Wait for VM Agent
       crystian.incus.incus_exec:
         name: "{{ vm_name }}"
@@ -109,10 +93,6 @@
       delay: 2
       changed_when: false
       ignore_errors: true
-
-    - name: Fix nested dnsmasq stale state (Restored)
-      command: "incus exec {{ vm_name }} -- /bin/bash -c 'rm -f /var/lib/incus/networks/incusbr0/dnsmasq.pid && systemctl restart incus'"
-      when: do_restore
 
     - name: Get VM IP
       set_fact:
@@ -134,9 +114,6 @@
   hosts: build_group
   gather_facts: false
   tasks:
-    # -------------------------------------------------------------------------
-    # Execute ONLY if Rebuilding (not restored)
-    # -------------------------------------------------------------------------
     - name: Run Configuration Tasks
       when: not hostvars['localhost']['do_restore'] | bool
       block:
@@ -147,7 +124,6 @@
         - name: Gather Facts
           setup:
 
-        # Kernel & ZFS - Update to latest to ensure headers match
         - name: Install Kernel and ZFS dependencies
           apt:
             name:
@@ -161,6 +137,7 @@
               - zfs-dkms
               - linux-headers-amd64
               - linux-image-amd64
+              - qemu-guest-agent
             state: latest
             update_cache: yes
           register: kernel_install
@@ -179,7 +156,6 @@
           setup:
           when: kernel_install.changed
 
-        # Incus Setup via Official Repo
         - name: Create Keyrings Dir
           file:
             path: /etc/apt/keyrings
@@ -199,19 +175,11 @@
             state: present
             update_cache: yes
 
-            state: present
-            update_cache: yes
-
         - name: Install Incus
           apt:
             name: incus
             state: present
             update_cache: yes
-
-        - name: Debug Incus Package
-          command: dpkg -l incus
-          register: debug_incus_pkg
-          ignore_errors: true
 
         - name: Start Incus Service
           service:
@@ -228,8 +196,6 @@
             config:
               core.https_address: ":8443"
 
-
-        # OVN Setup
         - name: Install OVN dependencies
           apt:
             name:
@@ -240,9 +206,6 @@
 
         - name: Configure OVS for OVN
           command: "ovs-vsctl set open_vswitch . external_ids:ovn-remote=unix:/run/ovn/ovnsb_db.sock external_ids:ovn-encap-type=geneve external_ids:ovn-encap-ip=127.0.0.1"
-          # This command is idempotent in OVS, but ansible doesn't know.
-          # We can accept changed=true or check first, but user asked for modules.
-          # Since no simple module exists for OVS DB, we keep this.
 
         - name: Enable OVN services
           service:
@@ -284,16 +247,10 @@
     remote_name: "test-infra"
 
   tasks:
-    # -------------------------------------------------------------------------
-    # 1. Get Token (From Play 2)
-    # -------------------------------------------------------------------------
     - name: Set Final Token
       set_fact:
         final_trust_token: "{{ hostvars[vm_name]['trust_token_generated']['token'] }}"
 
-    # -------------------------------------------------------------------------
-    # 2. Configure Remote
-    # -------------------------------------------------------------------------
     - name: Add Remote
       crystian.incus.incus_remote:
         name: "{{ remote_name }}"
@@ -301,12 +258,6 @@
         token: "{{ final_trust_token }}"
         accept_certificate: true
 
-    # -------------------------------------------------------------------------
-    # 3. Create Nested Resources (Only if Rebuild - Snapshot will contain them)
-    #    Wait! If we restore, resources are inside the VM, but we might need to ensure they exist?
-    #    Actually, if we restore the WHOLE VM, the nested Incus inside has its DB restored too.
-    #    So we ONLY need to create these on Rebuild.
-    # -------------------------------------------------------------------------
     - name: Create Nested Resources
       when: not do_restore | bool
       block:
@@ -339,9 +290,13 @@
                 type: nic
             state: present
 
-    # -------------------------------------------------------------------------
-    # 4. Create Snapshot (Only if Rebuild)
-    # -------------------------------------------------------------------------
+    - name: Prepare VM for clean snapshot (Stop)
+      crystian.incus.incus_instance:
+        name: "{{ vm_name }}"
+        state: present
+        started: false
+      when: not do_restore | bool
+
     - name: Create base-setup snapshot
       crystian.incus.incus_snapshot:
         instance_name: "{{ vm_name }}"
@@ -349,6 +304,13 @@
         state: present
       when: not do_restore | bool
 
-    - name: Pause to allow trust propagation
+    - name: Start VM again
+      crystian.incus.incus_instance:
+        name: "{{ vm_name }}"
+        state: present
+        started: true
+      when: not do_restore | bool
+
+    - name: Pause to allow trust propagation & VM boot
       pause:
-        seconds: 5
+        seconds: 10

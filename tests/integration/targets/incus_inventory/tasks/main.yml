@@ -364,6 +364,100 @@
           - "inv_data['_meta']['hostvars']['inv-web-01']['incus_user_tags']['env'] == 'integration'"
         fail_msg: "Host variables don't include expected tag values"
 
+    - name: "Create a custom project for test"
+      crystian.incus.incus_project:
+        name: test-inv-proj
+        state: present
+
+    - name: "Fix custom project default profile"
+      crystian.incus.incus_profile:
+        name: default
+        project: test-inv-proj
+        devices:
+          root:
+            path: /
+            pool: default
+            type: disk
+      ignore_errors: true
+
+    - name: "Create instance in custom project"
+      crystian.incus.incus_instance:
+        name: inv-proj-01
+        project: test-inv-proj
+        remote_image: images:debian/12
+        state: present
+        started: true
+
+    - name: "Wait for project instances to be ready"
+      wait_for:
+        timeout: 5
+
+    - name: "Create project-specific inventory"
+      file:
+        path: /tmp/inv_project
+        state: directory
+
+    - name: "Write inventory file (custom project)"
+      copy:
+        dest: /tmp/inv_project/incus_inventory.yml
+        content: |
+          plugin: crystian.incus.incus_inventory
+          projects:
+            - test-inv-proj
+          keyed_groups:
+            - prefix: tag
+              key: incus_user_tags
+
+    - name: "Run ansible-inventory --graph (project)"
+      command: ansible-inventory -i /tmp/inv_project/incus_inventory.yml --graph
+      environment: "{{ inv_env }}"
+      register: graph_project
+
+    - name: "Debug project graph"
+      debug:
+        var: graph_project.stdout
+
+    - name: "Assert custom project groups exist"
+      assert:
+        that:
+          - "'@incus_project_test_inv_proj' in graph_project.stdout or '@incus_project_test-inv-proj' in graph_project.stdout"
+          - "'inv-proj-01' in graph_project.stdout"
+          - "'inv-web-01' not in graph_project.stdout"
+        fail_msg: "Custom project grouping or filtering failed"
+
+    - name: "Create cache inventory"
+      file:
+        path: /tmp/inv_cache
+        state: directory
+
+    - name: "Write inventory file (cache enabled)"
+      copy:
+        dest: /tmp/inv_cache/incus_inventory.yml
+        content: |
+          plugin: crystian.incus.incus_inventory
+          projects:
+            - default
+          cache: yes
+          cache_plugin: jsonfile
+          cache_timeout: 3600
+          cache_connection: /tmp/inv_cache/cache_dir
+
+    - name: "Run ansible-inventory to populate cache"
+      command: ansible-inventory -i /tmp/inv_cache/incus_inventory.yml --list
+      environment: "{{ inv_env }}"
+
+    - name: "Check if cache file was created"
+      find:
+        paths: /tmp/inv_cache/cache_dir
+        patterns: "*"
+      register: cache_files
+
+    - name: "Assert cache file exists"
+      assert:
+        that:
+          - "cache_files.matched > 0"
+        fail_msg: "Inventory cache file was not created"
+
   always:
     - name: Cleanup test instances
       crystian.incus.incus_instance:
@@ -374,6 +468,20 @@
         - inv-web-01
         - inv-worker-01
         - inv-stopped-01
+      ignore_errors: true
+
+    - name: Cleanup project test instance
+      crystian.incus.incus_instance:
+        name: inv-proj-01
+        project: test-inv-proj
+        state: absent
+        force: true
+      ignore_errors: true
+
+    - name: Cleanup custom project
+      crystian.incus.incus_project:
+        name: test-inv-proj
+        state: absent
       ignore_errors: true
 
     - name: Cleanup temp dirs
@@ -390,4 +498,6 @@
         - /tmp/inv_groups
         - /tmp/inv_compose
         - /tmp/inv_list
+        - /tmp/inv_project
+        - /tmp/inv_cache
       ignore_errors: true

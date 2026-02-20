@@ -12,7 +12,8 @@ Idempotency is handled by checking if the server seems initialized (e.g. has sto
 |---|---|---|---|---|
 | `config` | True |  |  | The preseed configuration as a dictionary. Structure should match the YAML format expected by 'incus admin init --preseed'. |
 | `remote` | False |  |  | The remote Incus server to initialize. Defaults to 'local'. |
-| `force` | False | False |  | Force initialization even if the server appears to be already initialized. {'WARNING': 'This may fail if resources already exist or cause data loss depending on the config.'} |
+| `force` | False | False |  |  |
+| `minimal` | False | False |  | Perform a minimal initialization. |
 
 ## Examples
 

@@ -186,6 +186,10 @@
   args:
     creates: /tmp/cert.pem
 
+- name: Wait for certificate to be valid (clock skew fix)
+  pause:
+    seconds: 5
+
 - name: Read certificate
   slurp:
     src: /tmp/cert.pem
