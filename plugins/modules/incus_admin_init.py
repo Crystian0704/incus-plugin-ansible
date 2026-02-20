@@ -28,9 +28,11 @@ DOCUMENTATION = r"""
       required: False
       type: string
     force:
+      type: bool
+      default: false
+    minimal:
       description:
-        - Force initialization even if the server appears to be already initialized.
-        - WARNING: This may fail if resources already exist or cause data loss depending on the config.
+        - Perform a minimal initialization.
       type: bool
       default: false
 """

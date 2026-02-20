@@ -270,7 +270,6 @@
     state: absent
     force: true
 
-
 - name: Create storage volume for test
   crystian.incus.incus_storage_volume:
     pool: default
@@ -416,7 +415,6 @@
     that:
       - result_delete_idempotency.changed == false
 
-# === RESTART TESTS ===
 - name: Create instance for restart tests
   crystian.incus.incus_instance:
     name: test-restart
@@ -485,7 +483,6 @@
       - result_restart_fail is failed
       - "'not found' in result_restart_fail.msg"
 
-# === FREEZE / UNFREEZE TESTS ===
 - name: Freeze running instance
   crystian.incus.incus_instance:
     name: test-restart
@@ -556,7 +553,6 @@
       - result_freeze_stopped is failed
       - "'must be running' in result_freeze_stopped.msg"
 
-# === REBUILD TESTS ===
 - name: Create instance for rebuild tests
   crystian.incus.incus_instance:
     name: test-rebuild
@@ -632,7 +628,6 @@
       - result_rebuild_fail is failed
       - "'not found' in result_rebuild_fail.msg"
 
-# === CLEANUP ===
 - name: Cleanup restart test instance
   crystian.incus.incus_instance:
     name: test-restart
@@ -649,7 +644,6 @@
     force: true
   ignore_errors: true
 
-# === PROFILE TESTS ===
 - name: Create test profile
   crystian.incus.incus_profile:
     name: test-prof
@@ -716,6 +710,17 @@
     that:
       - result_prof_remove.changed == true
 
+- name: Add local root device to allow removing profiles
+  crystian.incus.incus_config:
+    instance_name: test-profile-inst
+    remote: "{{ target_remote | default(omit) }}"
+    devices:
+      root:
+        path: /
+        pool: default
+        type: disk
+    state: present
+
 - name: Remove all profiles (empty list)
   crystian.incus.incus_instance:
     name: test-profile-inst
@@ -729,7 +734,6 @@
     that:
       - result_prof_empty.changed == true
 
-# Cleanup
 - name: Cleanup profile instance
   crystian.incus.incus_instance:
     name: test-profile-inst

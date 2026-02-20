@@ -72,7 +72,33 @@ options:
       - Defaults to 'default'.
     required: false
     type: str
+    required: false
+    type: str
     default: default
+  cron:
+    description:
+      - Cron expression for automatic snapshot scheduling (e.g. '@daily').
+      - Sets 'snapshots.schedule'.
+    required: false
+    type: str
+  cron_stopped:
+    description:
+      - Whether to take snapshots even if the instance is stopped.
+      - Sets 'snapshots.schedule.stopped'.
+    required: false
+    type: bool
+  pattern:
+    description:
+      - Naming pattern for automatic snapshots (e.g. 'snap-%d').
+      - Sets 'snapshots.pattern'.
+    required: false
+    type: str
+  expiry:
+    description:
+      - Expiry expression for automatic snapshots (e.g. '30d').
+      - Sets 'snapshots.expiry'.
+    required: false
+    type: str
 author:
   - Crystian @Crystian0704
 '''

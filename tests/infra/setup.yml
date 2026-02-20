@@ -1,5 +1,5 @@
 ---
-- name: Provision Test Infrastructure
+- name: Provision Test Infrastructure (Localhost)
   hosts: localhost
   connection: local
   gather_facts: false
@@ -9,32 +9,70 @@
     image_name: "images:debian/13"
 
   tasks:
-    - name: Check for setup marker
-      stat:
-        path: .test_setup_complete
-      register: setup_marker
+    # -------------------------------------------------------------------------
+    # 1. Determine Strategy (Restore vs Rebuild)
+    # -------------------------------------------------------------------------
+    - name: Check for existing snapshot
+      crystian.incus.incus_info:
+        name: "{{ vm_name }}"
+      register: vm_info
 
-    - name: End play if setup is complete
-      meta: end_play
-      when:
-        - false # FORCE RUN
-        - not (delete_infra | default(false) | bool)
+    - name: Set Setup Strategy
+      set_fact:
+        # Restore if: snapshot exists AND NOT force_cleanup AND NOT force_restore
+        # Rebuild if: force_cleanup OR force_restore OR snapshot missing
+        do_restore: >-
+          {{
+            (force_restore | default(false) | bool) or
+            (
+              (not (force_cleanup | default(false) | bool)) and
+              (not vm_info.failed) and
+              ('base-setup' in (vm_info.info.snapshots | default([])))
+            )
+          }}
 
-    - name: Cleanup previous infra
-      crystian.incus.incus_remote:
-        name: "{{ remote_name }}"
-        state: absent
-      when: delete_infra | default(false) | bool
-      ignore_errors: true
+    # -------------------------------------------------------------------------
+    # 2. Cleanup (If Rebuilding)
+    # -------------------------------------------------------------------------
+    - name: Cleanup previous infra (Force Cleanup or Rebuild)
+      block:
+        - name: Remove VM
+          crystian.incus.incus_instance:
+            name: "{{ vm_name }}"
+            state: absent
+            force: true
+          ignore_errors: true
+          when: not do_restore
 
-    - name: Cleanup previous VM
+        - name: Remove Remote
+          crystian.incus.incus_remote:
+            name: "{{ remote_name }}"
+            state: absent
+          ignore_errors: true
+
+
+
+    # -------------------------------------------------------------------------
+    # 3. Restore (If Restoring)
+    # -------------------------------------------------------------------------
+    - name: Restore base-setup snapshot
+      crystian.incus.incus_snapshot:
+        instance_name: "{{ vm_name }}"
+        snapshot_name: base-setup
+        state: restored
+      when: do_restore
+      register: restore_result
+
+    - name: Ensure VM is started (Restored)
       crystian.incus.incus_instance:
         name: "{{ vm_name }}"
-        state: absent
-        force: true
-      when: delete_infra | default(false) | bool
-      ignore_errors: true
+        state: present
+        started: true
+      when: do_restore
 
+    # -------------------------------------------------------------------------
+    # 4. Create VM (If Rebuilding)
+    # -------------------------------------------------------------------------
     - name: Create Test VM (Debian 13)
       crystian.incus.incus_instance:
         name: "{{ vm_name }}"
@@ -43,13 +81,42 @@
         config:
           limits.cpu: "2"
           limits.memory: "2GiB"
+          security.secureboot: "false"
         started: true
         state: present
-      register: infra_vm
+      when: not do_restore
+      register: create_vm
 
-    - name: Wait for VM networking
-      wait_for:
-        timeout: 60
+    - name: Restart VM to apply config (Secure Boot)
+      crystian.incus.incus_instance:
+        name: "{{ vm_name }}"
+        state: restarted
+        force: true
+      when: 
+        - not do_restore
+        - create_vm.changed
+
+    # -------------------------------------------------------------------------
+    # 5. Wait for Connectivity
+    # -------------------------------------------------------------------------
+    - name: Wait for VM Agent
+      crystian.incus.incus_exec:
+        name: "{{ vm_name }}"
+        command: "true"
+      register: agent_check
+      until: agent_check.rc == 0
+      retries: 60
+      delay: 2
+      changed_when: false
+      ignore_errors: true
+
+    - name: Fix nested dnsmasq stale state (Restored)
+      command: "incus exec {{ vm_name }} -- /bin/bash -c 'rm -f /var/lib/incus/networks/incusbr0/dnsmasq.pid && systemctl restart incus'"
+      when: do_restore
+
+    - name: Get VM IP
+      set_fact:
+         vm_ip: "{{ query('crystian.incus.incus_list', vm_name) | map(attribute='state.network') | list | first | dict2items | map(attribute='value.addresses') | flatten | selectattr('family', 'equalto', 'inet') | map(attribute='address') | first }}"
 
     - name: Add host to inventory
       add_host:
@@ -58,89 +125,155 @@
         ansible_connection: community.general.incus
         ansible_incus_remote: local
         ansible_user: root
+        ansible_remote_tmp: /tmp
+        # Persist strategy to next plays
+        setup_strategy_restore: "{{ do_restore }}"
 
-- name: Configure Test Infrastructure
+
+- name: Configure Test Infrastructure (VM Inside)
   hosts: build_group
   gather_facts: false
   tasks:
-    - name: Install Python (raw)
-      raw: apt-get update && apt-get install -y python3
-      changed_when: false
+    # -------------------------------------------------------------------------
+    # Execute ONLY if Rebuilding (not restored)
+    # -------------------------------------------------------------------------
+    - name: Run Configuration Tasks
+      when: not hostvars['localhost']['do_restore'] | bool
+      block:
+        - name: Install Python (raw)
+          raw: apt-get update && apt-get install -y python3
+          changed_when: false
 
-    - name: Gather Facts
-      setup:
+        - name: Gather Facts
+          setup:
 
-    - name: Install dependencies
-      apt:
-        name:
-          - ca-certificates
-          - curl
-          - gnupg
-          - lvm2
-          - btrfs-progs
-          - python3-yaml
-        state: present
-        update_cache: yes
+        # Kernel & ZFS - Update to latest to ensure headers match
+        - name: Install Kernel and ZFS dependencies
+          apt:
+            name:
+              - ca-certificates
+              - curl
+              - gnupg
+              - lvm2
+              - btrfs-progs
+              - python3-yaml
+              - zfsutils-linux
+              - zfs-dkms
+              - linux-headers-amd64
+              - linux-image-amd64
+            state: latest
+            update_cache: yes
+          register: kernel_install
 
-    - name: Setup Zabbly Key
-      shell: "mkdir -p /etc/apt/keyrings; curl -fsSL https://pkgs.zabbly.com/key.asc -o /etc/apt/keyrings/zabbly.asc"
-      args:
-        creates: /etc/apt/keyrings/zabbly.asc
+        - name: Reboot if Kernel/ZFS updated
+          reboot:
+            msg: "Rebooting to activate new kernel/ZFS"
+            connect_timeout: 5
+            reboot_timeout: 300
+            pre_reboot_delay: 0
+            post_reboot_delay: 30
+            test_command: whoami
+          when: kernel_install.changed
 
-    - name: Setup Zabbly Repo
-      shell: "echo \"deb [signed-by=/etc/apt/keyrings/zabbly.asc] https://pkgs.zabbly.com/incus/daily $(. /etc/os-release && echo ${VERSION_CODENAME}) main\" > /etc/apt/sources.list.d/zabbly-incus-daily.list"
+        - name: Gather Facts again
+          setup:
+          when: kernel_install.changed
 
-    - name: Install Incus
-      apt:
-        name: incus
-        state: present
-        update_cache: yes
+        # Incus Setup via Official Repo
+        - name: Create Keyrings Dir
+          file:
+            path: /etc/apt/keyrings
+            state: directory
+            mode: '0755'
 
-    - name: Start Incus Service (if not running)
-      service:
-        name: incus
-        state: started
-        enabled: yes
+        - name: Download Zabbly Key
+          get_url:
+            url: https://pkgs.zabbly.com/key.asc
+            dest: /etc/apt/keyrings/zabbly.asc
+            mode: '0644'
 
-    - name: Initialize Incus
-      crystian.incus.incus_admin_init:
-        minimal: true
+        - name: Add Zabbly Repository
+          apt_repository:
+            repo: "deb [signed-by=/etc/apt/keyrings/zabbly.asc] https://pkgs.zabbly.com/incus/daily trixie main"
+            filename: zabbly-incus-daily
+            state: present
+            update_cache: yes
 
-    - name: Config bind address
-      crystian.incus.incus_config:
-        config:
-          core.https_address: ":8443"
-    
-    - name: Config trust token
-      crystian.incus.incus_config:
-        trust:
-          name: ansible-client
-      register: trust_token_out
+            state: present
+            update_cache: yes
 
-    - name: Install OVN dependencies
-      apt:
-        name:
-          - ovn-host
-          - ovn-central
-          - openvswitch-switch
-        state: present
+        - name: Install Incus
+          apt:
+            name: incus
+            state: present
+            update_cache: yes
 
-    - name: Configure OVS for OVN
-      command: "ovs-vsctl set open_vswitch . external_ids:ovn-remote=unix:/run/ovn/ovnsb_db.sock external_ids:ovn-encap-type=geneve external_ids:ovn-encap-ip=127.0.0.1"
+        - name: Debug Incus Package
+          command: dpkg -l incus
+          register: debug_incus_pkg
+          ignore_errors: true
 
-    - name: Enable OVN services
-      service:
-        name: "{{ item }}"
-        state: started
-        enabled: yes
-      loop:
-        - ovn-central
-        - ovn-host
+        - name: Start Incus Service
+          service:
+            name: incus
+            state: started
+            enabled: yes
 
-    - name: Configure Incus OVN connection
-      crystian.incus.incus_config:
-        config:
-          network.ovn.northbound_connection: "unix:/run/ovn/ovnnb_db.sock"
+        - name: Initialize Incus (Minimal)
+          crystian.incus.incus_admin_init:
+            minimal: true
+
+        - name: Config bind address
+          crystian.incus.incus_config:
+            config:
+              core.https_address: ":8443"
+
+
+        # OVN Setup
+        - name: Install OVN dependencies
+          apt:
+            name:
+              - ovn-host
+              - ovn-central
+              - openvswitch-switch
+            state: present
+
+        - name: Configure OVS for OVN
+          command: "ovs-vsctl set open_vswitch . external_ids:ovn-remote=unix:/run/ovn/ovnsb_db.sock external_ids:ovn-encap-type=geneve external_ids:ovn-encap-ip=127.0.0.1"
+          # This command is idempotent in OVS, but ansible doesn't know.
+          # We can accept changed=true or check first, but user asked for modules.
+          # Since no simple module exists for OVS DB, we keep this.
+
+        - name: Enable OVN services
+          service:
+            name: "{{ item }}"
+            state: started
+            enabled: yes
+          loop:
+            - ovn-central
+            - ovn-host
+
+        - name: Configure Incus OVN connection
+          crystian.incus.incus_config:
+            config:
+              network.ovn.northbound_connection: "unix:/run/ovn/ovnnb_db.sock"
+
+    - name: Reset Trust Token (Always)
+      block:
+        - name: Remove existing trust token
+          crystian.incus.incus_config:
+            trust:
+              name: ansible-client
+            state: absent
+
+        - name: Create trust token
+          crystian.incus.incus_config:
+            trust:
+              name: ansible-client
+            state: present
+          register: trust_token_generated
+
+
 
 - name: Finalize Setup (Localhost)
   hosts: localhost
@@ -149,52 +282,73 @@
   vars:
     vm_name: "test-infra-vm"
     remote_name: "test-infra"
+
   tasks:
-    - name: Get VM IP
+    # -------------------------------------------------------------------------
+    # 1. Get Token (From Play 2)
+    # -------------------------------------------------------------------------
+    - name: Set Final Token
       set_fact:
-         vm_ip: "{{ query('crystian.incus.incus_list', vm_name) | map(attribute='state.network') | list | first | dict2items | map(attribute='value.addresses') | flatten | selectattr('family', 'equalto', 'inet') | map(attribute='address') | first }}"
+        final_trust_token: "{{ hostvars[vm_name]['trust_token_generated']['token'] }}"
 
-    - name: Set Token Fact
-      set_fact:
-        trust_token: "{{ hostvars[vm_name]['trust_token_out']['token'] | default(hostvars[vm_name]['trust_token_out'].get('stdout', '') | trim) }}"
-
+    # -------------------------------------------------------------------------
+    # 2. Configure Remote
+    # -------------------------------------------------------------------------
     - name: Add Remote
       crystian.incus.incus_remote:
         name: "{{ remote_name }}"
         url: "https://{{ vm_ip }}:8443"
-        token: "{{ trust_token }}"
+        token: "{{ final_trust_token }}"
         accept_certificate: true
 
-    - name: Create incusbr0 network (nested)
-      crystian.incus.incus_network:
-         name: incusbr0
-         type: bridge
-         remote: "{{ remote_name }}"
-         state: present
+    # -------------------------------------------------------------------------
+    # 3. Create Nested Resources (Only if Rebuild - Snapshot will contain them)
+    #    Wait! If we restore, resources are inside the VM, but we might need to ensure they exist?
+    #    Actually, if we restore the WHOLE VM, the nested Incus inside has its DB restored too.
+    #    So we ONLY need to create these on Rebuild.
+    # -------------------------------------------------------------------------
+    - name: Create Nested Resources
+      when: not do_restore | bool
+      block:
+        - name: Create incusbr0 network (nested)
+          crystian.incus.incus_network:
+             name: incusbr0
+             type: bridge
+             remote: "{{ remote_name }}"
+             state: present
 
-    - name: Create default storage pool (nested)
-      crystian.incus.incus_storage:
-        pool: default
-        driver: dir
-        config:
-          source: /var/lib/incus/storage-pools/default
+        - name: Create default storage pool (nested)
+          crystian.incus.incus_storage:
+            name: default
+            driver: dir
+            remote: "{{ remote_name }}"
+            state: present
+
+        - name: Create default profile root disk (nested)
+          crystian.incus.incus_profile:
+            name: default
+            remote: "{{ remote_name }}"
+            devices:
+              root:
+                path: /
+                pool: default
+                type: disk
+              eth0:
+                name: eth0
+                network: incusbr0
+                type: nic
+            state: present
+
+    # -------------------------------------------------------------------------
+    # 4. Create Snapshot (Only if Rebuild)
+    # -------------------------------------------------------------------------
+    - name: Create base-setup snapshot
+      crystian.incus.incus_snapshot:
+        instance_name: "{{ vm_name }}"
+        snapshot_name: base-setup
         state: present
-        remote: "{{ remote_name }}"
-      delegate_to: localhost
+      when: not do_restore | bool
 
-    - name: Create default profile root disk (nested)
-      crystian.incus.incus_profile:
-        name: default
-        devices:
-          root:
-            path: /
-            pool: default
-            type: disk
-        state: present
-        remote: "{{ remote_name }}"
-      delegate_to: localhost
-
-    - name: Create setup marker
-      file:
-        path: .test_setup_complete
-        state: touch
+    - name: Pause to allow trust propagation
+      pause:
+        seconds: 5

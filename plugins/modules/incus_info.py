@@ -103,6 +103,15 @@ class IncusInfo(object):
             config = self._query("/1.0/instances/%s" % self.name)
             
             state = self._query("/1.0/instances/%s/state" % self.name)
+            try:
+                snapshots = self._query("/1.0/instances/%s/snapshots" % self.name)
+                # Parse snapshot names from URLs
+                chk_snap = []
+                for snap_url in snapshots:
+                     chk_snap.append(snap_url.split('/')[-1])
+                config['snapshots'] = chk_snap
+            except Exception:
+                config['snapshots'] = []
             
             config['state_info'] = state
             

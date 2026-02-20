@@ -77,9 +77,13 @@ options:
     description:
       - The project the instance belongs to.
       - Defaults to 'default'.
-    required: false
     type: str
-    default: default
+  recursive:
+    description:
+      - If true, push/pull directories recursively.
+    required: false
+    type: bool
+    default: false
 author:
   - Crystian @Crystian0704
 '''

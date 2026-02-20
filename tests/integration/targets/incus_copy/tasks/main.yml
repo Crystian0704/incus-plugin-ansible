@@ -13,7 +13,6 @@
     - move-dest
   ignore_errors: true
 
-# === COPY TESTS ===
 - name: Create source instance for copy
   crystian.incus.incus_instance:
     name: copy-source
@@ -69,7 +68,6 @@
       - result_copy_fail is failed
       - "'not found' in result_copy_fail.msg"
 
-# Cleanup copy dests
 - name: Cleanup copy-dest
   crystian.incus.incus_instance:
     name: copy-dest
@@ -86,7 +84,6 @@
     force: true
   ignore_errors: true
 
-# === MOVE TESTS ===
 - name: Create source instance for move
   crystian.incus.incus_instance:
     name: move-source
@@ -133,7 +130,6 @@
       - result_move_fail is failed
       - "'not found' in result_move_fail.msg"
 
-# === CLEANUP ===
 - name: Cleanup copy test instances
   crystian.incus.incus_instance:
     name: "{{ item }}"

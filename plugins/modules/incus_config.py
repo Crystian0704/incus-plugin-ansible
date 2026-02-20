@@ -268,12 +268,35 @@ class IncusConfig(object):
                 if self.module.check_mode:
                     pass
                 else:
-                    cmd = [self.incus_path, 'config', 'trust', 'add', trust_name, '--quiet']
-                    if self.remote:
-                        cmd.append("{}:".format(self.remote))
-                    
-                    rc, out, err = self._run_command(cmd)
-                    token = out.strip()
+                    trust_cert = self.trust.get('cert')
+                    if trust_cert:
+                        import tempfile
+                        import os
+                        
+                        target_args = []
+                        if self.remote:
+                            target_args.append("{}:".format(self.remote))
+                        
+                        fd, cert_path = tempfile.mkstemp()
+                        try:
+                            with os.fdopen(fd, 'w') as tmp:
+                                tmp.write(trust_cert)
+                            
+                            target_args.append(cert_path)
+                            
+                            cmd = [self.incus_path, 'config', 'trust', 'add-certificate'] + target_args + ['--name', trust_name, '--quiet']
+                            self._run_command(cmd)
+                        finally:
+                            os.remove(cert_path)
+                    else:
+                        target = trust_name
+                        if self.remote:
+                            target = "{}:{}".format(self.remote, trust_name)
+                        
+                        cmd = [self.incus_path, 'config', 'trust', 'add', target, '--quiet']
+                        
+                        rc, out, err = self._run_command(cmd)
+                        token = out.strip()
                 changed = True
         elif self.state == 'absent':
              if exists:
@@ -282,9 +305,11 @@ class IncusConfig(object):
                     if self.module.check_mode:
                         pass
                     else:
-                        cmd = [self.incus_path, 'config', 'trust', 'remove', fingerprint]
+                        target = fingerprint
                         if self.remote:
-                            cmd.append("{}:".format(self.remote))
+                            target = "{}:{}".format(self.remote, fingerprint)
+                        
+                        cmd = [self.incus_path, 'config', 'trust', 'remove', target, '--quiet']
                         self._run_command(cmd)
                     changed = True
 

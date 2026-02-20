@@ -6,15 +6,15 @@ import glob
 import re
 
 def extract_doc_yaml(content):
-    match = re.search(r'DOCUMENTATION\s*=\s*r?\'\'\'(.*?)\'\'\'', content, re.DOTALL)
+    match = re.search(r'DOCUMENTATION\s*=\s*r?(\'\'\'|""")(.*?)(\1)', content, re.DOTALL)
     if match:
-        return match.group(1)
+        return match.group(2)
     return None
 
 def extract_examples(content):
-    match = re.search(r'EXAMPLES\s*=\s*r?\'\'\'(.*?)\'\'\'', content, re.DOTALL)
+    match = re.search(r'EXAMPLES\s*=\s*r?(\'\'\'|""")(.*?)(\1)', content, re.DOTALL)
     if match:
-        return match.group(1)
+        return match.group(2)
     return None
 
 def extract_argument_spec(content):
@@ -24,7 +24,26 @@ def extract_argument_spec(content):
             if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == 'AnsibleModule':
                 for keyword in node.keywords:
                     if keyword.arg == 'argument_spec':
-                        return ast.literal_eval(keyword.value)
+                        if isinstance(keyword.value, ast.Call) and isinstance(keyword.value.func, ast.Name) and keyword.value.func.id == 'dict':
+                            # Handle dict(...) constructor
+                            args = {}
+                            for k in keyword.value.keywords:
+                                # Extract parameter definition if it's a dict(...) call
+                                param_def = {}
+                                if isinstance(k.value, ast.Call) and isinstance(k.value.func, ast.Name) and k.value.func.id == 'dict':
+                                    for pk in k.value.keywords:
+                                        # We are interested in 'required' which is usually a boolean literal
+                                        if pk.arg == 'required':
+                                            if isinstance(pk.value, ast.Constant): # Python 3.8+
+                                                param_def['required'] = pk.value.value
+                                            elif isinstance(pk.value, ast.NameConstant): # Python < 3.8
+                                                param_def['required'] = pk.value.value
+                                args[k.arg] = param_def
+                            return args
+                        elif isinstance(keyword.value, ast.Dict):
+                            # Handle {...} literal
+                            return ast.literal_eval(keyword.value)
+                        return {}
     except Exception as e:
         print(f"Error extracting argument_spec: {e}")
     return {}

@@ -378,7 +378,6 @@ class IncusStorageVolume(object):
              if rc != 0:
                  self.module.fail_json(msg="Failed to delete snapshot: " + err, stdout=out, stderr=err)
              self.module.exit_json(changed=True, msg="Snapshot deleted")
-             self.module.exit_json(changed=True, msg="Snapshot deleted")
 
         if self.module.check_mode:
             self.module.exit_json(changed=True, msg="Storage volume would be deleted")
@@ -484,11 +483,6 @@ class IncusStorageVolume(object):
 
     def check_if_attached(self, is_profile=False):
         target = self.attach_to
-        if is_profile:
-            target = self.attach_profile
-            if not target and self.detach_profile:
-                target = self.detach_profile
-        
         if is_profile:
             target = self.attach_profile
             if not target and self.detach_profile:

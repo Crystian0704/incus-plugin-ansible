@@ -45,6 +45,7 @@ ansible-galaxy collection install crystian-incus-1.0.0.tar.gz
 | `incus_project` | Manage Incus projects. |
 | `incus_image` | Manage Incus images (copy, import, export, delete, properties). |
 | `incus_remote` | Manage Incus remotes. |
+| `incus_copy` | Copy or move Incus instances. |
 | `incus_exec` | Execute commands in instances. |
 | `incus_file` | Manage files in instances. |
 | `incus_snapshot` | Manage instance snapshots. |
@@ -465,17 +466,54 @@ cd ~/.ansible/collections/ansible_collections/crystian/incus
 
 ### Running Integration Tests
 
+You can run tests using `ansible-test` (standard for collections) or directly via `ansible-playbook` (faster for local development/debugging).
+
+#### Method 1: ansible-test (Standard)
+This is the official way to test Ansible collections. It sets up the environment and runs sanity checks.
+
 ```bash
 # Run the full integration suite
 .venv/bin/ansible-test integration -v --local
 
 # Run a specific test target
 .venv/bin/ansible-test integration incus_instance -v --local
-.venv/bin/ansible-test integration incus_inventory -v --local
-.venv/bin/ansible-test integration incus_network -v --local
 
-# Resume from a specific target (after failure)
+# Resume from a specific target
 .venv/bin/ansible-test integration --start-at incus_inventory -v --local
+```
+
+#### Method 2: ansible-playbook (Fast/Dev)
+Useful for rapid iteration, debugging, and using specific optimization flags (`force_restore`, `skip-tags`).
+
+**Cheat Sheet:**
+
+| Goal | Command |
+|---|---|
+| **Run All Tests** | `ansible-playbook tests/integration.yml` |
+| **Run Specific Tag** | `ansible-playbook tests/integration.yml --tags incus_instance` |
+| **Fast Run (Skip ZFS)** | `ansible-playbook tests/integration.yml --skip-tags zfs` |
+| **Reset Environment** | `ansible-playbook tests/integration.yml -e force_cleanup=true` |
+| **Restore Snapshot** | `ansible-playbook tests/integration.yml -e force_restore=true` |
+| **Debug Specific Test** | `ansible-playbook tests/integration.yml --tags incus_inventory -vvv` |
+
+> [!TIP]
+> Combine flags for efficiency! For example, to run only inventory tests and force a snapshot restore:
+> `ansible-playbook tests/integration.yml --tags incus_inventory -e force_restore=true`
+
+### Snapshot Optimization
+The test setup (infra/setup.yml) automatically creates a snapshot (`base-setup`) of the test VM after the first successful run. Subsequent runs will:
+1. Detect the existing snapshot.
+2. Restore the VM state instantly (skipping package installation).
+3. Reuse the existing environment for tests.
+
+To force a full rebuild (discarding snapshot):
+```bash
+ansible-playbook tests/integration.yml -e "force_cleanup=true"
+```
+
+To force a restore from snapshot (skipping successful setup check):
+```bash
+ansible-playbook tests/integration.yml -e "force_restore=true"
 ```
 
 ### Available Test Targets

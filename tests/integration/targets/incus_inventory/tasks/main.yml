@@ -45,7 +45,6 @@
       set_fact:
         inv_env:
           ANSIBLE_INVENTORY_ENABLED: "crystian.incus.incus_inventory,yaml"
-          ANSIBLE_COLLECTIONS_PATH: "{{ collections_path }}"
 
     - name: "Create basic inventory with keyed_groups"
       file:
@@ -67,6 +66,10 @@
       command: ansible-inventory -i /tmp/inv_basic/incus_inventory.yml --graph
       environment: "{{ inv_env }}"
       register: graph_basic
+    
+    - name: Debug graph basic
+      debug:
+        var: graph_basic.stdout
 
     - name: "Assert auto-generated groups exist"
       assert:

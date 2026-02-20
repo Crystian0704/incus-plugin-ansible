@@ -158,6 +158,12 @@ options:
       - Maps to 'user.<key>' configuration keys.
     type: dict
     required: false
+  project:
+    description:
+      - The project instance belongs to.
+    required: false
+    type: str
+    default: default
   rename_from:
     description:
       - Name of an existing instance to rename to 'name'.

@@ -15,6 +15,12 @@ options:
       - Name of the profile.
     required: true
     type: str
+  source:
+    description:
+      - Path to a YAML file containing profile configuration.
+      - If provided, the profile is created/updated from this file.
+    required: false
+    type: path
   description:
     description:
       - Description of the profile.

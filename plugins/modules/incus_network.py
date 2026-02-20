@@ -60,6 +60,13 @@ options:
       - Cluster member target.
     required: false
     type: str
+  remote:
+    description:
+      - The remote server.
+      - Defaults to 'local'.
+    required: false
+    type: str
+    default: local
 author:
   - Crystian @Crystian0704
 '''

@@ -1,0 +1,44 @@
+# Project Development Instructions for LLMs & Developers
+
+## Mandatory AI Behavior
+- **Analyze Environment First**: Always check for the presence of `.venv`.
+- **Auto-Update Metadata**: Every time a plugin is created or meaningfully modified, you **must** update the following:
+  1. **galaxy.yml**: Increment the `version` (patch for fixes, minor for features) and ensure tags/metadata are accurate.
+  2. **README.md**: 
+     - Update the **Modules**, **Lookup Plugins**, or **Inventory Plugin** tables.
+     - Add a representative example in the **Usage Examples** section.
+- **Mandatory Documentation over Comments**: **Do not** add comments directly in the code logic. If technical implementation details are necessary, describe them within the `DOCUMENTATION` blocks or separate documentation files. The code itself should be clean and self-explanatory.
+- **Context Awareness**: Before implementing changes, read the existing plugin structure and documentation to maintain architectural consistency.
+
+## Virtual Environment (.venv)
+Before performing any development, running scripts, or testing tasks, you must activate the project's virtual environment.
+- **Activation**: Execute `source .venv/bin/activate` in your terminal.
+- **Dependencies**: The environment contains `ansible` and other necessary tools defined in `requirements.txt`. **All Python scripts must be run with the environment active.**
+
+## Plugin Creation and Development
+- **Location**: Store new modules in `plugins/modules/` and other plugin types in their respective subdirectories within `plugins/`.
+- **Naming**: Use the `incus_` prefix for all plugin filenames.
+- **Standards**: Follow Ansible programming standards and PEP 8 compliance.
+
+## Documentation Workflow
+- **Embedded Docs**: Always include `DOCUMENTATION`, `EXAMPLES`, and `RETURN` blocks within the plugin file.
+- **MANDATORY Execution Order**:
+  1. **Activate venv**: `source .venv/bin/activate`
+  2. **Generate Docs**: `python generate_docs.py`
+  3. **Audit Docs**: `python audit_docs.py`
+  
+> [!IMPORTANT]
+> Never run `generate_docs.py` or `audit_docs.py` without the virtual environment active.
+
+## Testing Protocols and Environment Isolation
+- **Environment Isolation**: **DO NOT** run integration tests directly on your local host. Tests must always be executed in an isolated environment (dedicated Test VMs or remote infrastructure).
+- **Remote Targets**: Verify the `target_remote` variable in `tests/integration.yml`.
+- **Running Tests**:
+  - Full suite: `ansible-playbook tests/integration.yml`
+  - Targeted plugin test: `ansible-playbook tests/integration.yml --tags <plugin_name>`
+- **Verification**: Ensure cleanup tasks are executed and verify the environment is clean.
+
+## General Practices
+- Always support the `remote` and `project` parameters in Incus-related modules.
+- Ensure all module operations are idempotent.
+- Maintain a clean Git history.

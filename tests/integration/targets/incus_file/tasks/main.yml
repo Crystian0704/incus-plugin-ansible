@@ -160,7 +160,6 @@
     state: pushed
     recursive: true
   register: push_dir
-  ignore_errors: true
 
 - name: Assert directory push
   assert:
