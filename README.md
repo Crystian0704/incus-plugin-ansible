@@ -38,36 +38,36 @@ ansible-galaxy collection install crystian-incus-1.0.0.tar.gz
 
 | Module | Description |
 |---|---|
-| `incus_instance` | Create, manage, and delete Incus instances (containers/VMs). |
-| `incus_storage` | Manage Incus storage pools. |
-| `incus_storage_volume` | Manage Incus storage volumes. |
-| `incus_profile` | Manage Incus profiles. |
-| `incus_project` | Manage Incus projects. |
-| `incus_image` | Manage Incus images (copy, import, export, delete, properties). |
-| `incus_remote` | Manage Incus remotes. |
-| `incus_copy` | Copy or move Incus instances. |
-| `incus_exec` | Execute commands in instances. |
-| `incus_file` | Manage files in instances. |
-| `incus_snapshot` | Manage instance snapshots. |
-| `incus_network` | Manage Incus networks. |
-| `incus_network_acl` | Manage Incus network ACLs. |
-| `incus_network_zone` | Manage Incus network zones. |
-| `incus_network_forward` | Manage Incus network forwards. |
-| `incus_info` | Get information about Incus resources. |
-| `incus_admin_init` | Initialize Incus server. |
-| `incus_config` | Manage instance configuration and devices. |
-| `incus_export` | Export instance backups. |
-| `incus_list` | List instances (module version). |
-| `incus_publish` | Publish instances as images. |
+| [`incus_instance`](docs/incus_instance.md) | Create, manage, and delete Incus instances (containers/VMs). |
+| [`incus_storage`](docs/incus_storage.md) | Manage Incus storage pools. |
+| [`incus_storage_volume`](docs/incus_storage_volume.md) | Manage Incus storage volumes. |
+| [`incus_profile`](docs/incus_profile.md) | Manage Incus profiles. |
+| [`incus_project`](docs/incus_project.md) | Manage Incus projects. |
+| [`incus_image`](docs/incus_image.md) | Manage Incus images (copy, import, export, delete, properties). |
+| [`incus_remote`](docs/incus_remote.md) | Manage Incus remotes. |
+| [`incus_copy`](docs/incus_copy.md) | Copy or move Incus instances. |
+| [`incus_exec`](docs/incus_exec.md) | Execute commands in instances. |
+| [`incus_file`](docs/incus_file.md) | Manage files in instances. |
+| [`incus_snapshot`](docs/incus_snapshot.md) | Manage instance snapshots. |
+| [`incus_network`](docs/incus_network.md) | Manage Incus networks. |
+| [`incus_network_acl`](docs/incus_network_acl.md) | Manage Incus network ACLs. |
+| [`incus_network_zone`](docs/incus_network_zone.md) | Manage Incus network zones. |
+| [`incus_network_forward`](docs/incus_network_forward.md) | Manage Incus network forwards. |
+| [`incus_info`](docs/incus_info.md) | Get information about Incus resources. |
+| [`incus_admin_init`](docs/incus_admin_init.md) | Initialize Incus server. |
+| [`incus_config`](docs/incus_config.md) | Manage instance configuration and devices. |
+| [`incus_export`](docs/incus_export.md) | Export instance backups. |
+| [`incus_list`](docs/incus_list.md) | List instances (module version). |
+| [`incus_publish`](docs/incus_publish.md) | Publish instances as images. |
 
 ## Lookup Plugins
 
 | Lookup | Description |
 |---|---|
-| `incus_config` | Get configuration of an instance. |
-| `incus_list` | List instances with filters. |
-| `incus_info` | Get detailed info/state of an instance or server. |
-| `incus_query` | Perform raw API queries. |
+| [`incus_config`](docs/incus_config_lookup.md) | Get configuration of an instance. |
+| [`incus_list`](docs/incus_list_lookup.md) | List instances with filters. |
+| [`incus_info`](docs/incus_info_lookup.md) | Get detailed info/state of an instance or server. |
+| [`incus_query`](docs/incus_query_lookup.md) | Perform raw API queries. |
 
 ## Inventory Plugin
 
@@ -81,7 +81,7 @@ The plugin:
 
 | Plugin | Description |
 |---|---|
-| `incus_inventory` | Dynamic inventory from Incus instances. |
+| [`incus_inventory`](docs/incus_inventory.md) | Dynamic inventory from Incus instances. |
 
 ### Quick Start
 
