@@ -491,9 +491,7 @@ Useful for rapid iteration, debugging, and using specific optimization flags (`f
 |---|---|
 | **Run All Tests** | `ansible-playbook tests/integration.yml` |
 | **Run Specific Tag** | `ansible-playbook tests/integration.yml --tags incus_instance` |
-| **Fast Run (Skip ZFS)** | `ansible-playbook tests/integration.yml --skip-tags zfs` |
 | **Reset Environment** | `ansible-playbook tests/integration.yml -e force_cleanup=true` |
-| **Restore Snapshot** | `ansible-playbook tests/integration.yml -e force_restore=true` |
 | **Debug Specific Test** | `ansible-playbook tests/integration.yml --tags incus_inventory -vvv` |
 
 > [!TIP]
