@@ -202,6 +202,37 @@
     state: absent
   ignore_errors: true
 
+# === COPY FLAGS TESTS ===
+- name: Cleanup remote copy with flags test
+  crystian.incus.incus_image:
+    alias: "test-alpine-flags"
+    remote: "{{ target_remote | default(omit) }}"
+    state: absent
+  ignore_errors: true
+
+- name: Copy remote image with extra flags
+  crystian.incus.incus_image:
+    alias: "test-alpine-flags"
+    source: "images:alpine/edge"
+    remote: "{{ target_remote | default(omit) }}"
+    copy_aliases: true
+    mode: pull
+    profiles: ["default"]
+    state: present
+  register: img_copy_flags
+
+- name: Assert copy with extra flags
+  assert:
+    that:
+      - img_copy_flags.changed == true
+
+- name: Cleanup remote copy with flags test
+  crystian.incus.incus_image:
+    alias: "test-alpine-flags"
+    remote: "{{ target_remote | default(omit) }}"
+    state: absent
+  ignore_errors: true
+
 # === INFO TESTS ===
 - name: Ensure test-image exists for info tests
   crystian.incus.incus_image:

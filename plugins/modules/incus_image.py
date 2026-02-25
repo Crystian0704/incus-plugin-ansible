@@ -67,6 +67,36 @@ options:
     required: false
     type: bool
     default: false
+  copy_aliases:
+    description:
+      - Copy aliases from source.
+    required: false
+    type: bool
+    default: false
+  mode:
+    description:
+      - Transfer mode. One of pull, push or relay.
+    required: false
+    type: str
+    choices: [ pull, push, relay ]
+    default: pull
+  profiles:
+    description:
+      - List of profiles to apply to the new image.
+    required: false
+    type: list
+    elements: str
+  target_project:
+    description:
+      - Copy to a different project from the source.
+    required: false
+    type: str
+  vm:
+    description:
+      - Copy virtual machine images.
+    required: false
+    type: bool
+    default: false
   auto_update:
     description:
       - Whether to auto-update the image (valid for remote copies).
@@ -215,6 +245,11 @@ class IncusImage(object):
         self.refresh = module.params['refresh']
         self.remote = module.params['remote']
         self.project = module.params['project']
+        self.copy_aliases = module.params['copy_aliases']
+        self.mode = module.params['mode']
+        self.profiles = module.params['profiles']
+        self.target_project = module.params['target_project']
+        self.vm = module.params['vm']
 
         if self.state != 'info' and not self.alias:
             self.module.fail_json(msg="The 'alias' parameter is required for state '{}'".format(self.state))
@@ -361,6 +396,17 @@ class IncusImage(object):
                     cmd_args.append('--auto-update')
                 if self.public:
                     cmd_args.append('--public')
+                if self.copy_aliases:
+                    cmd_args.append('--copy-aliases')
+                if self.mode and self.mode != 'pull':
+                    cmd_args.extend(['--mode', self.mode])
+                if self.profiles:
+                    for profile in self.profiles:
+                        cmd_args.extend(['--profile', profile])
+                if self.target_project:
+                    cmd_args.extend(['--target-project', self.target_project])
+                if self.vm:
+                    cmd_args.append('--vm')
                 if self.module.check_mode:
                     self.module.exit_json(changed=True, msg="Image would be copied")
                 rc, out, err = self.run_incus(cmd_args)
@@ -483,6 +529,11 @@ def main():
             refresh=dict(type='bool', default=False),
             remote=dict(type='str', default='local', required=False),
             project=dict(type='str', default='default', required=False),
+            copy_aliases=dict(type='bool', default=False),
+            mode=dict(type='str', default='pull', choices=['pull', 'push', 'relay']),
+            profiles=dict(type='list', elements='str', required=False),
+            target_project=dict(type='str', required=False),
+            vm=dict(type='bool', default=False),
         ),
         supports_check_mode=True,
     )

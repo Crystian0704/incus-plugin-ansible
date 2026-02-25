@@ -17,6 +17,11 @@ Supports copying from remotes, importing from files, exporting to files, and del
 | `properties` | False |  |  | Dictionary of properties to set on the image. Uses declarative behavior - properties not listed will be removed from the image. Supports special properties like C(requirements.secureboot), C(requirements.nesting), etc. |
 | `aliases` | False |  |  | List of additional aliases to assign to the image. |
 | `public` | False | False |  | Whether the image should be public. |
+| `copy_aliases` | False | False |  | Copy aliases from source. |
+| `mode` | False | pull | ['pull', 'push', 'relay'] | Transfer mode. One of pull, push or relay. |
+| `profiles` | False |  |  | List of profiles to apply to the new image. |
+| `target_project` | False |  |  | Copy to a different project from the source. |
+| `vm` | False | False |  | Copy virtual machine images. |
 | `auto_update` | False | False |  | Whether to auto-update the image (valid for remote copies). |
 | `refresh` | False | False |  | Whether to refresh the image from the remote source if it already exists. |
 | `remote` | False | local |  | The remote server. Defaults to 'local'. |
