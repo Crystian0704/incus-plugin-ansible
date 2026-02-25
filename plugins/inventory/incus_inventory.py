@@ -202,26 +202,25 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
             
             self.inventory.add_host(name)
             
+            self.inventory.set_variable(name, 'ansible_become', False)
             self.inventory.set_variable(name, 'ansible_connection', 'community.general.incus')
-            self.inventory.set_variable(name, 'ansible_incus_remote', remote)
-            self.inventory.set_variable(name, 'ansible_incus_project', project)
             self.inventory.set_variable(name, 'ansible_host', name)
+            self.inventory.set_variable(name, 'ansible_incus_project', project)
+            self.inventory.set_variable(name, 'ansible_incus_remote', remote)
+            self.inventory.set_variable(name, 'ansible_user', 'root')
             
             config = instance.get('config', {})
             tags = {}
             for key, value in config.items():
-                var_name = 'incus_config_' + key.replace('.', '_').replace('-', '_')
-                self.inventory.set_variable(name, var_name, value)
-                
                 if key.startswith('user.'):
                     tag_key = key[5:] 
                     tags[tag_key] = value
-                    self.inventory.set_variable(name, 'tag_' + tag_key, value)
+                    
+            if tags:
+                self.inventory.set_variable(name, 'incus_user_tags', tags)
 
-            self.inventory.set_variable(name, 'incus_user_tags', tags)
-
-            remote_group = 'incus_remote_' + remote
-            project_group = 'incus_project_' + project
+            remote_group = 'remote_' + remote
+            project_group = 'project_' + project
             
             self.inventory.add_group(remote_group)
             self.inventory.add_child(remote_group, name)
@@ -232,3 +231,7 @@ class InventoryModule(BaseInventoryPlugin, Constructable, Cacheable):
             self._set_composite_vars(self.get_option('compose'), self.inventory.get_host(name).get_vars(), name, strict=True)
             self._add_host_to_composed_groups(self.get_option('groups'), self.inventory.get_host(name).get_vars(), name, strict=True)
             self._add_host_to_keyed_groups(self.get_option('keyed_groups'), self.inventory.get_host(name).get_vars(), name, strict=True)
+
+        unknown_keys = [k for k in self.inventory.groups if isinstance(k, str) and k.endswith('_unknown')]
+        for k in unknown_keys:
+             del self.inventory.groups[k]
