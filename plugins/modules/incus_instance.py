@@ -319,7 +319,13 @@ class IncusInstance(object):
     def create_instance(self):
         if not self.remote_image and not self.empty:
              self.module.fail_json(msg="remote_image is required when creating an instance (state=present)")
-        cmd = [self.incus_path, 'init', self.remote_image, self.name]
+                     
+        image_src = self.remote_image
+        if self.remote and self.remote != 'local':
+             if ':' not in image_src:
+                  image_src = "{}:{}".format(self.remote, image_src)
+                  
+        cmd = [self.incus_path, 'init', image_src, self.name]
         if self.vm:
             cmd.append('--vm')
         if self.ephemeral:
