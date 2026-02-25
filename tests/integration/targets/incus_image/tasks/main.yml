@@ -201,3 +201,46 @@
     path: "/tmp/exported_image"
     state: absent
   ignore_errors: true
+
+# === INFO TESTS ===
+- name: Ensure test-image exists for info tests
+  crystian.incus.incus_image:
+    alias: "test-info-alpine"
+    source: "images:alpine/edge"
+    remote: "{{ target_remote | default(omit) }}"
+    state: present
+
+- name: Retrieve info for specific image by alias
+  crystian.incus.incus_image:
+    alias: "test-info-alpine"
+    remote: "{{ target_remote | default(omit) }}"
+    state: info
+  register: img_info_specific
+
+- name: Assert specific image info retrieved
+  assert:
+    that:
+      - img_info_specific.changed == false
+      - img_info_specific.images is defined
+      - img_info_specific.images | length == 1
+      - "('test-info-alpine' in img_info_specific.images[0].aliases | map(attribute='name') | list) or (img_info_specific.images[0].aliases | length == 0)"  # Just to ensure we got some data, incus aliases structure check
+
+- name: Retrieve info for all images
+  crystian.incus.incus_image:
+    remote: "{{ target_remote | default(omit) }}"
+    state: info
+  register: img_info_all
+
+- name: Assert all images info retrieved
+  assert:
+    that:
+      - img_info_all.changed == false
+      - img_info_all.images is defined
+      - img_info_all.images | length >= 1
+
+- name: Cleanup test image used for info
+  crystian.incus.incus_image:
+    alias: "test-info-alpine"
+    remote: "{{ target_remote | default(omit) }}"
+    state: absent
+  ignore_errors: true

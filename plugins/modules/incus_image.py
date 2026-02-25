@@ -15,7 +15,7 @@ options:
     description:
       - Alias of the image.
       - Used as the primary identifier for presence checks if fingerprint is not provided.
-    required: true
+    required: false
     type: str
     aliases: [ name ]
   fingerprint:
@@ -30,9 +30,10 @@ options:
       - 'present': Ensure image exists (copy or import if missing).
       - 'absent': Ensure image is removed.
       - 'exported': Export image to file.
+      - 'info': Retrieve information about images.
     required: false
     type: str
-    choices: [ present, absent, exported ]
+    choices: [ present, absent, exported, info ]
     default: present
   source:
     description:
@@ -165,6 +166,16 @@ EXAMPLES = r'''
   crystian.incus.incus_image:
     alias: my-alpine
     state: absent
+
+- name: Retrieve image info by alias
+  crystian.incus.incus_image:
+    alias: my-alpine
+    state: info
+
+- name: List all remote images
+  crystian.incus.incus_image:
+    remote: my-remote
+    state: info
 '''
 RETURN = r'''
 msg:
@@ -179,6 +190,11 @@ properties:
   description: Current properties of the image after changes
   returned: when available
   type: dict
+images:
+  description: List of images matching the request (for state=info)
+  returned: when state=info
+  type: list
+  elements: dict
 '''
 from ansible.module_utils.basic import AnsibleModule
 import subprocess
@@ -199,6 +215,9 @@ class IncusImage(object):
         self.refresh = module.params['refresh']
         self.remote = module.params['remote']
         self.project = module.params['project']
+
+        if self.state != 'info' and not self.alias:
+            self.module.fail_json(msg="The 'alias' parameter is required for state '{}'".format(self.state))
     def run_incus(self, args):
         cmd = ['incus']
         if self.project:
@@ -413,6 +432,33 @@ class IncusImage(object):
         if rc != 0:
              self.module.fail_json(msg="Failed to export image: " + err, stdout=out, stderr=err)
         self.module.exit_json(changed=True, msg="Image exported")
+
+    def info(self):
+        cmd_args = ['image', 'list', '--format', 'json']
+        
+        target_remote = ''
+        if self.remote and self.remote != 'local':
+             target_remote = self.remote + ':'
+             
+        if self.alias:
+            cmd_args.insert(2, target_remote + self.alias)
+        elif target_remote:
+            cmd_args.insert(2, target_remote)
+            
+        rc, out, err = self.run_incus(cmd_args)
+        if rc != 0:
+            self.module.fail_json(msg="Failed to retrieve images information: " + err, stdout=out, stderr=err)
+            
+        try:
+            images = json.loads(out)
+        except Exception as e:
+            self.module.fail_json(msg="Failed to parse incus output: {}".format(str(e)), stdout=out, stderr=err)
+            
+        self.module.exit_json(
+            changed=False,
+            images=images
+        )
+
     def run(self):
         if self.state == 'present':
             self.present()
@@ -420,12 +466,14 @@ class IncusImage(object):
             self.absent()
         elif self.state == 'exported':
             self.exported()
+        elif self.state == 'info':
+            self.info()
 def main():
     module = AnsibleModule(
         argument_spec=dict(
-            alias=dict(type='str', required=True, aliases=['name']),
+            alias=dict(type='str', required=False, aliases=['name']),
             fingerprint=dict(type='str', required=False),
-            state=dict(type='str', default='present', choices=['present', 'absent', 'exported']),
+            state=dict(type='str', default='present', choices=['present', 'absent', 'exported', 'info']),
             source=dict(type='str', required=False),
             dest=dict(type='path', required=False),
             properties=dict(type='dict', required=False),

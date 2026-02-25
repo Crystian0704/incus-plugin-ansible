@@ -9,9 +9,9 @@ Supports copying from remotes, importing from files, exporting to files, and del
 
 | Parameter | Required | Default | Choices | Description |
 |---|---|---|---|---|
-| `alias` | True |  |  | Alias of the image. Used as the primary identifier for presence checks if fingerprint is not provided. |
+| `alias` | False |  |  | Alias of the image. Used as the primary identifier for presence checks if fingerprint is not provided. |
 | `fingerprint` | False |  |  | Fingerprint of the image. If provided, used to verify the exact image identity. |
-| `state` | False | present | ['present', 'absent', 'exported'] | State of the image. {'present': 'Ensure image exists (copy or import if missing).'} {'absent': 'Ensure image is removed.'} {'exported': 'Export image to file.'} |
+| `state` | False | present | ['present', 'absent', 'exported', 'info'] | State of the image. {'present': 'Ensure image exists (copy or import if missing).'} {'absent': 'Ensure image is removed.'} {'exported': 'Export image to file.'} {'info': 'Retrieve information about images.'} |
 | `source` | False |  |  | Source for the image when state='present'. Can be a remote image (e.g. 'images:alpine/edge') or a local file path. If it looks like a file path, it is treated as an import. If it looks like a remote:alias, it is treated as a copy. |
 | `dest` | False |  |  | Destination path for exported image (when state='exported'). |
 | `properties` | False |  |  | Dictionary of properties to set on the image. Uses declarative behavior - properties not listed will be removed from the image. Supports special properties like C(requirements.secureboot), C(requirements.nesting), etc. |
@@ -94,6 +94,16 @@ Supports copying from remotes, importing from files, exporting to files, and del
   crystian.incus.incus_image:
     alias: my-alpine
     state: absent
+
+- name: Retrieve image info by alias
+  crystian.incus.incus_image:
+    alias: my-alpine
+    state: info
+
+- name: List all remote images
+  crystian.incus.incus_image:
+    remote: my-remote
+    state: info
 ```
 
 ## Return Values
@@ -111,4 +121,9 @@ properties:
   description: Current properties of the image after changes
   returned: when available
   type: dict
+images:
+  description: List of images matching the request (for state=info)
+  returned: when state=info
+  type: list
+  elements: dict
 ```

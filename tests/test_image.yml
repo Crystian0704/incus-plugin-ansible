@@ -1,0 +1,8 @@
+---
+- name: Test incus_image module
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Run incus_image integration tasks
+      include_tasks: "integration/targets/incus_image/tasks/main.yml"
