@@ -409,6 +409,7 @@ class IncusImage(object):
                     cmd_args.append('--vm')
                 if self.module.check_mode:
                     self.module.exit_json(changed=True, msg="Image would be copied")
+
                 rc, out, err = self.run_incus(cmd_args)
                 if rc != 0:
                     self.module.fail_json(msg="Failed to copy image: " + err, stdout=out, stderr=err)

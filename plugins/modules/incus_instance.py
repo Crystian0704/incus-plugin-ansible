@@ -319,7 +319,7 @@ class IncusInstance(object):
     def create_instance(self):
         if not self.remote_image and not self.empty:
              self.module.fail_json(msg="remote_image is required when creating an instance (state=present)")
-                     
+             
         image_src = self.remote_image
         if self.remote and self.remote != 'local':
              if ':' not in image_src:
@@ -472,6 +472,32 @@ class IncusInstance(object):
         cmd = [self.incus_path, 'move', source, target]
         self._run_command(cmd)
 
+    def get_image_info(self, image_source):
+        target_image = image_source
+        if self.remote and self.remote != 'local':
+            if ':' not in image_source:
+                target_image = "{}:{}".format(self.remote, image_source)
+        
+        cmd = [self.incus_path, 'image', 'list', target_image, '--format=json']
+        rc, out, err = self._run_command(cmd, check_rc=False)
+        if rc == 0:
+             try:
+                 images = json.loads(out)
+                 if images and len(images) > 0:
+                     clean_id = image_source.split(':')[-1]
+                     for img in images:
+                         if img['fingerprint'].startswith(clean_id):
+                             return img
+                         if 'aliases' in img and img['aliases']:
+                             for alias in img['aliases']:
+                                 if alias['name'] == clean_id:
+                                     return img
+                     # Fallback to first if strict match not found (usually 1 item list)
+                     return images[0]
+             except ValueError:
+                 pass
+        return None
+
     def run(self):
         changed = False
         if self.state == 'present' and self.rename_from:
@@ -514,6 +540,28 @@ class IncusInstance(object):
                 self.configure_devices()
                 if self.configure_profiles():
                     changed = True 
+
+                if self.remote_image:
+                     new_image_info = self.get_image_info(self.remote_image)
+                     if new_image_info and 'fingerprint' in new_image_info:
+                         current_base = info.get('config', {}).get('volatile.base_image', '')
+                         new_fp = new_image_info['fingerprint']
+                         if current_base and not new_fp.startswith(current_base) and not current_base.startswith(new_fp):
+                             if self.module.check_mode:
+                                 self.module.exit_json(changed=True, msg="Instance would be rebuilt due to image change")
+                             self.rebuild_image = self.remote_image
+                             
+                             was_running = (info['status'].lower() == 'running')
+                             if was_running:
+                                 self.stop_instance()
+                                 
+                             self.rebuild_instance()
+                             
+                             if was_running and self.started:
+                                 self.start_instance()
+                                 
+                             changed = True
+                             info = self.get_instance_info()
 
             current_status = info['status'].lower()
             
