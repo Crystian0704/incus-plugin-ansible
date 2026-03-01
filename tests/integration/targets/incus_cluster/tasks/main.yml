@@ -1,0 +1,377 @@
+---
+# --------------------------------------------------------------------------
+# Cluster Test Infrastructure Setup
+# --------------------------------------------------------------------------
+- name: Create cluster test containers
+  crystian.incus.incus_instance:
+    name: "{{ item }}"
+    remote: "{{ target_remote }}"
+    remote_image: images:debian/13
+    config:
+      security.nesting: "true"
+      security.privileged: "true"
+    state: present
+    started: true
+  loop:
+    - cluster-node1
+    - cluster-node2
+    - cluster-node3
+
+- name: Wait for containers to be ready
+  crystian.incus.incus_exec:
+    name: "{{ item }}"
+    remote: "{{ target_remote }}"
+    command: "true"
+  register: agent_check
+  until: agent_check.rc == 0
+  retries: 30
+  delay: 2
+  changed_when: false
+  ignore_errors: true
+  loop:
+    - cluster-node1
+    - cluster-node2
+    - cluster-node3
+
+- name: Install dependencies in containers
+  crystian.incus.incus_exec:
+    name: "{{ item }}"
+    remote: "{{ target_remote }}"
+    command: >-
+      bash -c "
+      apt-get update &&
+      apt-get install -y python3 curl ca-certificates gnupg &&
+      mkdir -p /etc/apt/keyrings &&
+      curl -fsSL https://pkgs.zabbly.com/key.asc -o /etc/apt/keyrings/zabbly.asc &&
+      echo 'deb [signed-by=/etc/apt/keyrings/zabbly.asc] https://pkgs.zabbly.com/incus/daily trixie main' > /etc/apt/sources.list.d/zabbly-incus.list &&
+      apt-get update &&
+      apt-get install -y incus
+      "
+  changed_when: false
+  loop:
+    - cluster-node1
+    - cluster-node2
+    - cluster-node3
+
+- name: Initialize Incus in containers
+  crystian.incus.incus_exec:
+    name: "{{ item }}"
+    remote: "{{ target_remote }}"
+    command: "incus admin init --minimal"
+  changed_when: false
+  loop:
+    - cluster-node1
+    - cluster-node2
+    - cluster-node3
+
+- name: Get container IPs (eth0 only)
+  crystian.incus.incus_exec:
+    name: "{{ item }}"
+    remote: "{{ target_remote }}"
+    command: "bash -c \"ip -4 addr show eth0 | grep -oP 'inet \\K[\\d.]+'\""
+  register: node_ips_raw
+  changed_when: false
+  loop:
+    - cluster-node1
+    - cluster-node2
+    - cluster-node3
+
+- name: Set node IP facts
+  set_fact:
+    node_ips: >-
+      {{
+        node_ips | default({}) | combine({
+          item.item: item.stdout | trim
+        })
+      }}
+  loop: "{{ node_ips_raw.results }}"
+
+- name: Configure HTTPS address with specific IP
+  crystian.incus.incus_exec:
+    name: "{{ item.key }}"
+    remote: "{{ target_remote }}"
+    command: "incus config set core.https_address {{ item.value }}:8443"
+  changed_when: false
+  loop: "{{ node_ips | dict2items }}"
+
+# --------------------------------------------------------------------------
+# T1 - Enable clustering on node1
+# --------------------------------------------------------------------------
+- name: T1 - Enable clustering on node1
+  crystian.incus.incus_exec:
+    name: cluster-node1
+    remote: "{{ target_remote }}"
+    command: "incus cluster enable node1"
+  register: enable_result
+
+- name: T1 - Verify cluster enabled
+  crystian.incus.incus_exec:
+    name: cluster-node1
+    remote: "{{ target_remote }}"
+    command: "incus cluster list --format=json"
+  register: cluster_list
+
+- name: T1 - Assert node1 is in cluster
+  assert:
+    that:
+      - "(cluster_list.stdout | from_json) | length == 1"
+      - "(cluster_list.stdout | from_json)[0].server_name == 'node1'"
+
+# --------------------------------------------------------------------------
+# T2 - Generate join tokens for node2 and node3
+# --------------------------------------------------------------------------
+- name: T2 - Generate join token for node2
+  crystian.incus.incus_exec:
+    name: cluster-node1
+    remote: "{{ target_remote }}"
+    command: "incus cluster add node2"
+  register: token_node2
+
+- name: T2 - Set node2 join token
+  set_fact:
+    join_token_node2: "{{ token_node2.stdout | trim | regex_search('([A-Za-z0-9+/=.:]+)$') }}"
+
+- name: T2 - Generate join token for node3
+  crystian.incus.incus_exec:
+    name: cluster-node1
+    remote: "{{ target_remote }}"
+    command: "incus cluster add node3"
+  register: token_node3
+
+- name: T2 - Set node3 join token
+  set_fact:
+    join_token_node3: "{{ token_node3.stdout | trim | regex_search('([A-Za-z0-9+/=.:]+)$') }}"
+
+# --------------------------------------------------------------------------
+# T3 - Join node2 and node3 to the cluster
+# --------------------------------------------------------------------------
+- name: T3 - Set node IPs from collected facts
+  set_fact:
+    node2_ip: "{{ node_ips['cluster-node2'] }}"
+    node3_ip: "{{ node_ips['cluster-node3'] }}"
+
+- name: T3 - Join node2 to cluster via preseed
+  crystian.incus.incus_exec:
+    name: cluster-node2
+    remote: "{{ target_remote }}"
+    command: "bash -c \"printf 'cluster:\\n  enabled: true\\n  server_address: {{ node2_ip }}:8443\\n  cluster_token: {{ join_token_node2 }}\\n' | incus admin init --preseed\""
+  register: join_node2
+
+- name: T3 - Join node3 to cluster via preseed
+  crystian.incus.incus_exec:
+    name: cluster-node3
+    remote: "{{ target_remote }}"
+    command: "bash -c \"printf 'cluster:\\n  enabled: true\\n  server_address: {{ node3_ip }}:8443\\n  cluster_token: {{ join_token_node3 }}\\n' | incus admin init --preseed\""
+  register: join_node3
+
+- name: T3 - Wait for cluster convergence
+  pause:
+    seconds: 5
+
+# --------------------------------------------------------------------------
+# T4 - List cluster members
+# --------------------------------------------------------------------------
+- name: T4 - List cluster members
+  crystian.incus.incus_exec:
+    name: cluster-node1
+    remote: "{{ target_remote }}"
+    command: "incus cluster list --format=json"
+  register: list_result
+
+- name: T4 - Assert 3 members in cluster
+  assert:
+    that:
+      - "(list_result.stdout | from_json) | length == 3"
+      - "'node1' in (list_result.stdout | from_json | map(attribute='server_name') | list)"
+      - "'node2' in (list_result.stdout | from_json | map(attribute='server_name') | list)"
+      - "'node3' in (list_result.stdout | from_json | map(attribute='server_name') | list)"
+
+# --------------------------------------------------------------------------
+# T5 - Show member details
+# --------------------------------------------------------------------------
+- name: T5 - Show node1 details
+  crystian.incus.incus_exec:
+    name: cluster-node1
+    remote: "{{ target_remote }}"
+    command: "incus cluster show node1"
+  register: show_result
+
+- name: T5 - Assert member info returned
+  assert:
+    that:
+      - "'server_name: node1' in show_result.stdout"
+      - "'status: Online' in show_result.stdout"
+
+# --------------------------------------------------------------------------
+# T6 - Set member config
+# --------------------------------------------------------------------------
+- name: T6 - Set scheduler config on node1
+  crystian.incus.incus_exec:
+    name: cluster-node1
+    remote: "{{ target_remote }}"
+    command: "incus cluster set node1 scheduler.instance all"
+
+- name: T6 - Verify config was applied
+  crystian.incus.incus_exec:
+    name: cluster-node1
+    remote: "{{ target_remote }}"
+    command: "incus cluster get node1 scheduler.instance"
+  register: config_verify
+
+- name: T6 - Assert config value
+  assert:
+    that:
+      - config_verify.stdout | trim == 'all'
+
+# --------------------------------------------------------------------------
+# T7 - Create cluster groups
+# --------------------------------------------------------------------------
+- name: T7 - Create compute group
+  crystian.incus.incus_exec:
+    name: cluster-node1
+    remote: "{{ target_remote }}"
+    command: "incus cluster group create compute"
+
+- name: T7 - Create storage group
+  crystian.incus.incus_exec:
+    name: cluster-node1
+    remote: "{{ target_remote }}"
+    command: "incus cluster group create storage"
+
+- name: T7 - Verify groups exist
+  crystian.incus.incus_exec:
+    name: cluster-node1
+    remote: "{{ target_remote }}"
+    command: "incus cluster group list --format=json"
+  register: groups_list
+
+- name: T7 - Assert groups created
+  assert:
+    that:
+      - "'compute' in (groups_list.stdout | from_json | map(attribute='name') | list)"
+      - "'storage' in (groups_list.stdout | from_json | map(attribute='name') | list)"
+
+# --------------------------------------------------------------------------
+# T8 - Assign groups to member
+# --------------------------------------------------------------------------
+- name: T8 - Assign compute group to node1
+  crystian.incus.incus_exec:
+    name: cluster-node1
+    remote: "{{ target_remote }}"
+    command: "incus cluster group assign node1 default,compute"
+
+- name: T8 - Verify group assigned
+  crystian.incus.incus_exec:
+    name: cluster-node1
+    remote: "{{ target_remote }}"
+    command: "incus cluster show node1"
+  register: node1_after_assign
+
+- name: T8 - Assert compute group in node1
+  assert:
+    that:
+      - "'compute' in node1_after_assign.stdout"
+
+# --------------------------------------------------------------------------
+# T9 - List cluster groups
+# --------------------------------------------------------------------------
+- name: T9 - List cluster groups
+  crystian.incus.incus_exec:
+    name: cluster-node1
+    remote: "{{ target_remote }}"
+    command: "incus cluster group list --format=json"
+  register: groups_list_final
+
+- name: T9 - Assert groups listed correctly
+  assert:
+    that:
+      - "(groups_list_final.stdout | from_json) | length >= 3"
+      - "'default' in (groups_list_final.stdout | from_json | map(attribute='name') | list)"
+      - "'compute' in (groups_list_final.stdout | from_json | map(attribute='name') | list)"
+      - "'storage' in (groups_list_final.stdout | from_json | map(attribute='name') | list)"
+
+# --------------------------------------------------------------------------
+# T10 - Delete cluster groups
+# --------------------------------------------------------------------------
+- name: T10 - Unassign compute from node1
+  crystian.incus.incus_exec:
+    name: cluster-node1
+    remote: "{{ target_remote }}"
+    command: "incus cluster group assign node1 default"
+  changed_when: false
+
+- name: T10 - Delete compute group
+  crystian.incus.incus_exec:
+    name: cluster-node1
+    remote: "{{ target_remote }}"
+    command: "incus cluster group delete compute"
+
+- name: T10 - Delete storage group
+  crystian.incus.incus_exec:
+    name: cluster-node1
+    remote: "{{ target_remote }}"
+    command: "incus cluster group delete storage"
+
+- name: T10 - Verify groups deleted
+  crystian.incus.incus_exec:
+    name: cluster-node1
+    remote: "{{ target_remote }}"
+    command: "incus cluster group list --format=json"
+  register: groups_after_delete
+
+- name: T10 - Assert groups no longer exist
+  assert:
+    that:
+      - "'compute' not in (groups_after_delete.stdout | from_json | map(attribute='name') | list)"
+      - "'storage' not in (groups_after_delete.stdout | from_json | map(attribute='name') | list)"
+
+# --------------------------------------------------------------------------
+# T11 - Remove member from cluster
+# --------------------------------------------------------------------------
+- name: T11 - Evacuate node3 before removal
+  crystian.incus.incus_exec:
+    name: cluster-node1
+    remote: "{{ target_remote }}"
+    command: "incus cluster evacuate node3 --force"
+  ignore_errors: true
+
+- name: T11 - Stop node3 Incus
+  crystian.incus.incus_exec:
+    name: cluster-node3
+    remote: "{{ target_remote }}"
+    command: "systemctl stop incus"
+  ignore_errors: true
+
+- name: T11 - Remove node3 from cluster
+  crystian.incus.incus_exec:
+    name: cluster-node1
+    remote: "{{ target_remote }}"
+    command: "incus cluster remove node3 --force --yes"
+
+- name: T11 - Verify only 2 members remain
+  crystian.incus.incus_exec:
+    name: cluster-node1
+    remote: "{{ target_remote }}"
+    command: "incus cluster list --format=json"
+  register: final_list
+
+- name: T11 - Assert 2 members
+  assert:
+    that:
+      - "(final_list.stdout | from_json) | length == 2"
+      - "'node3' not in (final_list.stdout | from_json | map(attribute='server_name') | list)"
+
+# --------------------------------------------------------------------------
+# Cleanup
+# --------------------------------------------------------------------------
+- name: Cleanup - Destroy cluster containers
+  crystian.incus.incus_instance:
+    name: "{{ item }}"
+    remote: "{{ target_remote }}"
+    state: absent
+    force: true
+  loop:
+    - cluster-node1
+    - cluster-node2
+    - cluster-node3
+  ignore_errors: true

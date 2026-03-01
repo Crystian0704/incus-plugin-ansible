@@ -1,0 +1,117 @@
+---
+- name: Provision Cluster Test Infrastructure
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    target_remote: test-infra
+    cluster_nodes:
+      - cluster-node1
+      - cluster-node2
+      - cluster-node3
+
+  tasks:
+
+    - name: Create cluster test containers
+      crystian.incus.incus_instance:
+        name: "{{ item }}"
+        remote: "{{ target_remote }}"
+        remote_image: images:debian/13
+        config:
+          security.nesting: "true"
+          security.privileged: "true"
+        state: present
+        started: true
+      loop: "{{ cluster_nodes }}"
+
+    - name: Wait for containers to be ready
+      crystian.incus.incus_exec:
+        name: "{{ item }}"
+        remote: "{{ target_remote }}"
+        command: "true"
+      register: agent_check
+      until: agent_check.rc == 0
+      retries: 30
+      delay: 2
+      changed_when: false
+      ignore_errors: true
+      loop: "{{ cluster_nodes }}"
+
+    - name: Install Python in containers
+      crystian.incus.incus_exec:
+        name: "{{ item }}"
+        remote: "{{ target_remote }}"
+        command: "apt-get update && apt-get install -y python3"
+      changed_when: false
+      loop: "{{ cluster_nodes }}"
+
+    - name: Add Zabbly key in containers
+      crystian.incus.incus_exec:
+        name: "{{ item }}"
+        remote: "{{ target_remote }}"
+        command: >-
+          bash -c "
+          mkdir -p /etc/apt/keyrings &&
+          curl -fsSL https://pkgs.zabbly.com/key.asc -o /etc/apt/keyrings/zabbly.asc
+          "
+      changed_when: false
+      loop: "{{ cluster_nodes }}"
+
+    - name: Add Zabbly repo in containers
+      crystian.incus.incus_exec:
+        name: "{{ item }}"
+        remote: "{{ target_remote }}"
+        command: >-
+          bash -c "
+          echo 'deb [signed-by=/etc/apt/keyrings/zabbly.asc] https://pkgs.zabbly.com/incus/daily trixie main' > /etc/apt/sources.list.d/zabbly-incus.list &&
+          apt-get update
+          "
+      changed_when: false
+      loop: "{{ cluster_nodes }}"
+
+    - name: Install Incus in containers
+      crystian.incus.incus_exec:
+        name: "{{ item }}"
+        remote: "{{ target_remote }}"
+        command: "apt-get install -y incus"
+      changed_when: false
+      loop: "{{ cluster_nodes }}"
+
+    - name: Start Incus service in containers
+      crystian.incus.incus_exec:
+        name: "{{ item }}"
+        remote: "{{ target_remote }}"
+        command: "incus admin init --minimal"
+      changed_when: false
+      loop: "{{ cluster_nodes }}"
+
+    - name: Configure HTTPS address in containers
+      crystian.incus.incus_exec:
+        name: "{{ item }}"
+        remote: "{{ target_remote }}"
+        command: "incus config set core.https_address :8443"
+      changed_when: false
+      loop: "{{ cluster_nodes }}"
+
+    - name: Get container IPs
+      crystian.incus.incus_exec:
+        name: "{{ item }}"
+        remote: "{{ target_remote }}"
+        command: "hostname -I"
+      register: node_ips
+      changed_when: false
+      loop: "{{ cluster_nodes }}"
+
+    - name: Set node IP facts
+      set_fact:
+        cluster_node_ips: >-
+          {{
+            cluster_node_ips | default({}) | combine({
+              item.item: (item.stdout | trim).split(' ') | first
+            })
+          }}
+      loop: "{{ node_ips.results }}"
+
+    - name: Debug cluster IPs
+      debug:
+        msg: "Cluster node IPs: {{ cluster_node_ips }}"

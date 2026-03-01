@@ -85,3 +85,7 @@
     - name: Test incus_admin_init
       import_tasks: integration/targets/incus_admin_init/tasks/main.yml
       tags: [incus_admin_init]
+
+    - name: Test incus_cluster
+      import_tasks: integration/targets/incus_cluster/tasks/main.yml
+      tags: [incus_cluster]

@@ -59,6 +59,7 @@ ansible-galaxy collection install crystian-incus-1.0.0.tar.gz
 | [`incus_export`](docs/incus_export.md) | Export instance backups. |
 | [`incus_list`](docs/incus_list.md) | List instances (module version). |
 | [`incus_publish`](docs/incus_publish.md) | Publish instances as images. |
+| [`incus_cluster`](docs/incus_cluster.md) | Manage Incus clusters (members, groups, tokens). |
 
 ## Lookup Plugins
 
@@ -415,6 +416,39 @@ For the complete reference, see [Inventory Plugin Documentation](docs/incus_inve
               type: nic
 ```
 
+### Cluster Management
+```yaml
+- name: Enable clustering
+  crystian.incus.incus_cluster:
+    name: node1
+    state: enabled
+
+- name: Generate join token for a new member
+  crystian.incus.incus_cluster:
+    name: node2
+    state: present
+  register: join_result
+
+- name: List cluster members
+  crystian.incus.incus_cluster:
+    state: listed
+  register: cluster_members
+
+- name: Create cluster groups
+  crystian.incus.incus_cluster:
+    groups:
+      - name: compute
+        description: "Compute nodes"
+    state: present
+
+- name: Assign member to group
+  crystian.incus.incus_cluster:
+    name: node1
+    groups:
+      - compute
+    state: present
+```
+
 ### Trust Management
 ```yaml
 - name: Add client trust
@@ -537,10 +571,10 @@ ansible-playbook tests/integration.yml -e "force_restore=true"
 | `incus_remote` | Remote management |
 | `incus_snapshot` | Snapshot management |
 | `incus_storage` | Storage pools and volumes |
+| `incus_cluster` | Cluster management (members, groups) |
 
 ## Known Limitations
 
-- **Missing Modules**: `incus_cluster` for `incus cluster` is not yet implemented.
 - **Storage Backends**: Support for some specific storage backends is incomplete.
 - **Testing**: More complex integration tests and edge cases need to be covered.
 
